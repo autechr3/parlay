@@ -30,6 +30,7 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
   const [pending, setPending] = useState(0);
   const shownAt = useRef(Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
+  const grading = useRef(false);
 
   const card = initialQueue[i];
   const direction: Direction | null =
@@ -40,6 +41,7 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
   useEffect(() => {
     setRevealed(false); setTyped(""); setVerdict(null);
     shownAt.current = Date.now();
+    grading.current = false;
     queue.pendingCount().then(setPending);
     if (typedCard) inputRef.current?.focus();
   }, [i, queue, typedCard]);
@@ -56,14 +58,18 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
     setRevealed(true);
   }
 
-  async function grade(g: number) {
-    if (!card || !revealed || !direction) return;
+  function grade(g: number) {
+    if (!card || !revealed || !direction || grading.current) return;
+    grading.current = true;
     // near-miss on typed cards caps the grade at 3 (spec: SRS algorithm section)
     const finalGrade = verdict === "close" ? Math.min(g, 3) : verdict === "wrong" ? Math.min(g, 1) : g;
-    await queue.enqueue({
-      vocabId: card.vocab_id, grade: finalGrade, direction,
-      msTaken: Date.now() - shownAt.current, ts: Date.now(),
-    });
+    queue
+      .enqueue({
+        vocabId: card.vocab_id, grade: finalGrade, direction,
+        msTaken: Date.now() - shownAt.current, ts: Date.now(),
+      })
+      .then(() => queue.pendingCount().then(setPending))
+      .catch(() => {});
     setTally((t) => ({ ...t, [finalGrade]: (t[finalGrade] ?? 0) + 1 }));
     setI((v) => v + 1);
   }
@@ -74,6 +80,7 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
   // documented "run after every render" escape hatch), so no disable comment is needed.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.repeat) return;
       if (e.target instanceof HTMLInputElement) {
         if (e.key === "Enter" && !revealed) submitTyped();
         return;
