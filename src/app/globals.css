@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
   --background: #ffffff;
@@ -28,3 +29,9 @@ body {
 @theme {
   --font-fa: var(--font-fa), serif;
 }
+
+/* Lesson bodies (react-markdown) mix English and Persian. `unicode-bidi: plaintext`
+   makes mixed-direction table cells/list items/paragraphs order themselves by their
+   own first strong character — the markdown equivalent of wrapping each in <bdi>. */
+.prose { font-feature-settings: normal; }
+.prose :where(td, th, li, p, strong) { unicode-bidi: plaintext; }
