@@ -61,13 +61,33 @@ select cron.schedule('daily-study-reminder', '0 * * * *', $$
     body    := '{}'::jsonb);
 $$);
 
-select cron.schedule('weekly-digest', '0 * * * 0', $$
+select cron.schedule('weekly-digest', '0 * * * *', $$
   select net.http_post(
     url     := current_setting('app.edge_url') || '/weekly-digest',
     headers := jsonb_build_object('Content-Type','application/json',
                'Authorization','Bearer ' || current_setting('app.service_role_key')),
     body    := '{}'::jsonb);
 $$);
+
+-- defense-in-depth: these functions are security definer and only meant to be called
+-- via the edge functions using the service_role key; revoke the default PostgREST-exposed
+-- execute grants from public/anon/authenticated.
+-- NOTE: unlike Postgres superusers, `service_role` here does NOT bypass GRANT/REVOKE — it only
+-- has BYPASSRLS (see 20260809000006_service_role_grants.sql for the same caveat on table grants).
+-- Verified locally: `select has_function_privilege('service_role', 'users_due_daily_email()', 'execute')`
+-- returns false immediately after a bare `revoke ... from public, anon, authenticated` (function owner
+-- is `postgres`, not `service_role`), and the daily-reminder edge function fails with
+-- "permission denied for function users_due_daily_email" until the explicit grant below is added.
+-- So each revoke is paired with an explicit re-grant to service_role.
+revoke execute on function users_due_daily_email() from public, anon, authenticated;
+revoke execute on function users_due_weekly_digest() from public, anon, authenticated;
+revoke execute on function next_lesson_for(uuid, int) from public, anon, authenticated;
+revoke execute on function top_errors_for(uuid, timestamptz, int) from public, anon, authenticated;
+
+grant execute on function users_due_daily_email() to service_role;
+grant execute on function users_due_weekly_digest() to service_role;
+grant execute on function next_lesson_for(uuid, int) to service_role;
+grant execute on function top_errors_for(uuid, timestamptz, int) to service_role;
 
 -- app.edge_url / app.service_role_key are set per-environment:
 --   locally:  alter database postgres set app.edge_url = 'http://host.docker.internal:54321/functions/v1';
