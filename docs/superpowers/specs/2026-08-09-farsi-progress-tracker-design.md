@@ -44,6 +44,12 @@ Keep it boring. No state-management library — server components and `@supabase
 - **Digits.** Persian digits ۰–۹ (U+06F0–U+06F9). Helpers `toPersianDigits()` / `toWesternDigits()` used at the render boundary only; numbers stored as numbers.
 - **Ezâfe.** Vocab may carry kasre (U+0650) as a teaching aid. Diacritics are stripped for comparison when grading typed answers.
 
+## Shared Persian UI components
+
+- **`<FarsiText>` tri-state toggle.** Everywhere Farsi text appears with known transliteration/translation, it renders in Persian script by default; clicking cycles script → transliteration → English translation → back to script. Implemented once as a client component `FarsiText({ farsi, translit, english })` and used across flashcards, vocab table, lesson vocab, dashboard, etc. In `/review`, the card prompt must NOT cycle before reveal (it would leak the answer) — the component accepts `locked` to disable cycling; after reveal it unlocks.
+- **`<FaKeyboard>` on-screen Persian keyboard.** A clickable keyboard component for typing Farsi anywhere the app accepts Persian input (production review cards, vocab search, manual vocab add). Standard Persian layout (three rows), plus dedicated keys for **ZWNJ (نیم‌فاصله)**, space, and backspace. Bound to a controlled input via `onKey(char)` / `onBackspace()`. Thumb-sized keys on mobile. The native keyboard still works — the component supplements it.
+- **Verb conjugation helpers.** `conjugatePresent(presentStem)` → the six present forms (`می‌` + stem + ‑م/‑ی/‑د/‑یم/‑ید/‑ند, with the glide ی inserted for stems ending in ا or و: می‌آیم، می‌گویم) and `conjugatePast(pastStem)` → six past forms (stem + ‑م/‑ی/‑∅/‑یم/‑ید/‑ند). Used by flashcards and stem review cards.
+
 ## Data model
 
 ```sql
@@ -230,6 +236,7 @@ Interval capped at 365 days. New cards enter with `due_on = today`. `grade_card`
 - **`/` Dashboard** — streak, cards due today, next lesson with one-click "start" that copies a ready-made tutor prompt to the clipboard, this week's progress vs the weekly target, 90-day study heatmap.
 - **`/review`** — the main loop. One card at a time, keyboard-driven (space to reveal, 1–4 to grade), Persian-script input for production cards, progress bar, session summary. The due queue is fetched once server-side; the session then runs fully client-side with the next card prefetched. Grades are always written to an IndexedDB queue and synced in the background — one mechanism covers both "no spinner between cards" and offline tolerance. No layout shift on reveal; must feel instant.
 - **`/lessons`** — grid by unit showing status (locked / available / complete), confidence, completion date. Clicking one renders `body_md` plus a completion form. Next lesson gated behind current completion, with an explicit override (nudge, not jail).
+- **`/flashcards`** — free cram mode, separate from SRS (no effect on `vocab_reviews` scheduling). Pulls **only from lessons the user has learned** (completed lessons, plus the current in-progress lesson). Deck picker: choose one or more learned lessons and a deck type — **vocabulary** (one card per vocab item) or **verb conjugations** (one card per verb; front = infinitive + pronoun prompt, back = full six-form conjugation table from `conjugatePresent`/`conjugatePast`). Cards shuffle; flipping uses the `<FarsiText>` cycle (script → translit → English). Keyboard: space flips, arrows navigate. Used between lessons for memorization.
 - **`/vocab`** — searchable/filterable table of all items with SRS state. Persian search via the trigram index; filters by lesson/POS/tag; manual add; suspend/unsuspend.
 - **`/progress`** — skill ratings over time (line chart per skill), ranked error-frequency list from `practice_sessions.errors` (the most useful thing on the page), vocabulary retention rate, total study time.
 - **`/settings`** — timezone, email on/off, delivery hour, weekly target, daily card limits.
