@@ -1,0 +1,3 @@
+-- Intentionally empty: real content is loaded via `npm run seed` (scripts/seed-lessons.ts)
+-- against a running local Supabase instance, not via `supabase db reset`'s seed step.
+-- This file's only job is to exist, so `db reset` doesn't warn about a missing seed path.

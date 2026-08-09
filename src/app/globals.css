@@ -27,7 +27,7 @@ body {
 }
 
 @theme {
-  --font-fa: var(--font-fa), serif;
+  --font-fa: var(--font-vazirmatn), serif;
 }
 
 /* Lesson bodies (react-markdown) mix English and Persian. `unicode-bidi: plaintext`

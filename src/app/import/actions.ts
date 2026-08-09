@@ -24,6 +24,23 @@ export async function importPackage(raw: string, confirm: boolean): Promise<Impo
     return { ok: false, errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
   const pkg = parsed.data;
 
+  // Multi-course isn't supported by the UI yet: importing a package whose course.name
+  // doesn't match an existing course would silently create a second course the user
+  // has no way to switch to or see. Block it up front, in both the preview and
+  // confirm paths, rather than letting it succeed and confuse the user later.
+  const { data: ownedCourses, error: ownedErr } = await supabase.from("courses")
+    .select("name").eq("owner_id", user.id);
+  if (ownedErr) return { ok: false, errors: [ownedErr.message] };
+  const hasOtherCourse = (ownedCourses ?? []).length > 0
+    && !(ownedCourses ?? []).some((c) => c.name === pkg.course.name);
+  if (hasOtherCourse) {
+    const existingName = (ownedCourses ?? [])[0].name;
+    return { ok: false, errors: [
+      `You already have a course ('${existingName}'). Multi-course support isn't ready yet — ` +
+      `to add content to your existing course, set course.name to exactly '${existingName}' in the package.`,
+    ] };
+  }
+
   if (!confirm) {
     const { data: course } = await supabase.from("courses")
       .select("id").eq("owner_id", user.id).eq("name", pkg.course.name).maybeSingle();

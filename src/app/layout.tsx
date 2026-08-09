@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const vazirmatn = localFont({
   src: "../fonts/Vazirmatn[wght].woff2",
-  variable: "--font-fa",
+  variable: "--font-vazirmatn",
   display: "swap",
 });
 

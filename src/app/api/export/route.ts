@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 const USER_TABLES = ["profiles", "lesson_completions", "practice_sessions", "skill_ratings",
-  "vocab_reviews", "review_log", "study_days", "exercise_attempts"];
+  "vocab_reviews", "review_log", "study_days", "exercise_attempts", "email_log"];
 const COURSE_TABLES = ["courses", "units", "lessons", "vocab_items", "exercises"]; // owner RLS scopes these too
 
 export async function GET() {

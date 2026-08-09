@@ -17,13 +17,18 @@ const ExerciseSchema = z.object({
 const LessonSchema = z.object({
   number: z.number().int().positive(), title: z.string().min(1),
   unit: z.number().int().positive().nullish(), slug: z.string().nullish(),
-  grammar_points: z.array(z.string()).default([]),
-  estimated_minutes: z.number().int().positive().default(60),
-  is_review: z.boolean().default(false), is_assessment: z.boolean().default(false),
+  // No defaults here: absent fields must stay absent so a partial package (e.g. the
+  // number+title+exercises shape /prompts tells agents to emit) doesn't overwrite
+  // existing lesson data with these fallbacks. Defaults are applied in
+  // buildLessonPayload, but only for genuinely NEW lessons.
+  grammar_points: z.array(z.string()).optional(),
+  estimated_minutes: z.number().int().positive().optional(),
+  is_review: z.boolean().optional(), is_assessment: z.boolean().optional(),
   body_md: z.string().nullish(),
   vocab: z.array(VocabSchema).optional(),
   exercises: z.array(ExerciseSchema).optional(),  // absent = leave existing alone
 });
+export type Lesson = z.infer<typeof LessonSchema>;
 
 export const ContentPackageSchema = z.object({
   format: z.literal("farsi-tracker/content-package"),
@@ -40,6 +45,41 @@ export type ImportResult = { courseId: string; units: number; lessons: number; v
 
 export function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Pure payload builder for the lessons upsert. Presence-aware: a field is only
+// included in the payload when it was actually provided in the package, EXCEPT
+// for genuinely new lessons (isNew=true), where the DB requires slug and the
+// historical defaults (grammar [], 60min, not review/assessment) are applied so
+// a brand-new lesson always lands in a fully-populated state.
+export function buildLessonPayload(
+  l: Lesson, isNew: boolean, courseId: string, unitId: Map<number, string>,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    course_id: courseId, number: l.number, title: l.title,
+    ...(l.unit ? { unit_id: unitId.get(l.unit) } : {}),
+  };
+
+  if (l.slug != null) payload.slug = l.slug;
+  else if (isNew) payload.slug = slugify(l.title);
+
+  if (l.grammar_points !== undefined) payload.grammar_points = l.grammar_points;
+  else if (isNew) payload.grammar_points = [];
+
+  if (l.estimated_minutes !== undefined) payload.estimated_minutes = l.estimated_minutes;
+  else if (isNew) payload.estimated_minutes = 60;
+
+  if (l.is_review !== undefined) payload.is_review = l.is_review;
+  else if (isNew) payload.is_review = false;
+
+  if (l.is_assessment !== undefined) payload.is_assessment = l.is_assessment;
+  else if (isNew) payload.is_assessment = false;
+
+  if (l.vocab !== undefined) payload.new_vocab_count = l.vocab.length;
+
+  if (l.body_md != null) payload.body_md = l.body_md;
+
+  return payload;
 }
 
 export async function importContentPackage(
@@ -68,16 +108,18 @@ export async function importContentPackage(
   if (uErr) throw uErr;
   const unitId = new Map((units ?? []).map((u) => [u.number, u.id]));
 
+  const { data: existingLessons, error: elErr } = await supabase
+    .from("lessons").select("number").eq("course_id", courseId);
+  if (elErr) throw elErr;
+  const existingNumbers = new Set((existingLessons ?? []).map((l) => l.number));
+
   let vocabCount = 0, exCount = 0;
   for (const l of pkg.lessons) {
-    const { data: lesson, error: lErr } = await supabase.from("lessons").upsert({
-      course_id: courseId, number: l.number, title: l.title,
-      slug: l.slug ?? slugify(l.title), unit_id: l.unit ? unitId.get(l.unit) : null,
-      grammar_points: l.grammar_points, estimated_minutes: l.estimated_minutes,
-      is_review: l.is_review, is_assessment: l.is_assessment,
-      new_vocab_count: l.vocab?.length ?? null,
-      ...(l.body_md != null ? { body_md: l.body_md } : {}),
-    }, { onConflict: "course_id,number" }).select("id").single();
+    const isNew = !existingNumbers.has(l.number);
+    const payload = buildLessonPayload(l, isNew, courseId, unitId);
+    const { data: lesson, error: lErr } = await supabase.from("lessons").upsert(
+      payload, { onConflict: "course_id,number" },
+    ).select("id").single();
     if (lErr) throw lErr;
 
     for (const v of l.vocab ?? []) {

@@ -25,6 +25,12 @@ export default async function globalSetup() {
   if (!url || !serviceKey) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY must be set (check .env.local)");
   }
+  // Must run before any Supabase client is created or any mutation happens below —
+  // this setup deletes review history for the test user, so refuse to touch anything
+  // that isn't obviously a local instance.
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url)) {
+    throw new Error(`e2e global setup refuses to run against non-local Supabase: ${url} — it deletes review history for the test user.`);
+  }
   const supabase = createClient(url, serviceKey);
 
   const { error: createErr } = await supabase.auth.admin.createUser({
@@ -56,10 +62,6 @@ export default async function globalSetup() {
       { onConflict: "user_id,lesson_id", ignoreDuplicates: true },
     );
   if (completionsErr) throw new Error(`failed to upsert lesson_completions: ${completionsErr.message}`);
-
-  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url ?? "")) {
-    throw new Error(`e2e global setup refuses to run against non-local Supabase: ${url} — it deletes review history for the test user.`);
-  }
 
   const { error: reviewLogErr } = await supabase.from("review_log").delete().eq("user_id", userId);
   if (reviewLogErr) throw new Error(`failed to clear review_log: ${reviewLogErr.message}`);

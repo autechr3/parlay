@@ -16,4 +16,8 @@ describe("pickDirection", () => {
     expect(pickDirection("verb", 4)).toBe("en_to_fa");
     expect(pickDirection("verb", 5)).toBe("stem");
   });
+  it("verbs without a present stem fall through to the non-verb alternation", () => {
+    expect(pickDirection("verb", 2, false)).toBe("fa_to_en");
+    expect(pickDirection("verb", 3, false)).toBe("en_to_fa");
+  });
 });

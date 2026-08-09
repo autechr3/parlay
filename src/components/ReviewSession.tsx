@@ -34,7 +34,7 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
 
   const card = initialQueue[i];
   const direction: Direction | null =
-    card ? pickDirection(card.part_of_speech, card.repetitions) : null;
+    card ? pickDirection(card.part_of_speech, card.repetitions, !!card.present_stem) : null;
   const typedCard = direction === "en_to_fa" || direction === "stem";
   const expected = !card ? "" : direction === "stem" ? (card.present_stem ?? "") : card.farsi;
 

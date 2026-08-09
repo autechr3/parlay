@@ -10,8 +10,25 @@ export async function updateSettings(formData: FormData) {
     const v = Number(formData.get(k));
     return Number.isInteger(v) && v >= lo && v <= hi ? v : dflt;
   };
+
+  // Free-text timezone input reaches `now() at time zone tz` in SQL (grade_card,
+  // get_review_queue, local_today, the daily/weekly email selection functions),
+  // which throws for anything Postgres doesn't recognize as a zone name. A bad
+  // value here doesn't just break this user's grade_card — it breaks the shared
+  // email-selection functions for everyone. Validate against the IANA database
+  // and silently keep the existing value on garbage input rather than throwing
+  // or writing something invalid.
+  const requestedTz = String(formData.get("timezone") || "");
+  const validTz = Intl.supportedValuesOf("timeZone").includes(requestedTz);
+  let timezone = requestedTz;
+  if (!validTz) {
+    const { data: existing } = await supabase.from("profiles")
+      .select("timezone").eq("id", user.id).single();
+    timezone = existing?.timezone || "America/New_York";
+  }
+
   const { error } = await supabase.from("profiles").update({
-    timezone: String(formData.get("timezone") || "America/New_York"),
+    timezone,
     daily_email_enabled: formData.get("daily_email_enabled") === "on",
     daily_email_hour: int("daily_email_hour", 0, 23, 7),
     target_lessons_per_week: int("target_lessons_per_week", 1, 21, 5),
