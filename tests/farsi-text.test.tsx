@@ -29,4 +29,9 @@ describe("FarsiText", () => {
     const span = container.querySelector('span[dir="rtl"]')!;
     expect(span.getAttribute("lang")).toBe("fa");
   });
+  it("Enter key cycles stages", () => {
+    const { getByRole } = render(<FarsiText farsi="کتاب" english="book" />);
+    fireEvent.keyDown(getByRole("button"), { key: "Enter" });
+    expect(getByRole("button").textContent).toBe("book");
+  });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Props = {
   farsi: string; translit?: string | null; english?: string | null;
@@ -13,6 +13,7 @@ export function FarsiText({ farsi, translit, english, locked = false, className 
     ...(english ? [{ key: "en", text: english }] : []),
   ];
   const [i, setI] = useState(0);
+  useEffect(() => { setI(0); }, [farsi, translit, english]);
   const stage = stages[i % stages.length];
   const cyclable = !locked && stages.length > 1;
 
