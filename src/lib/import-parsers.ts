@@ -85,3 +85,17 @@ export function parseVocabTables(bodyMd: string) {
   }
   return out;
 }
+
+export function parseExercises(bodyMd: string) {
+  const m = bodyMd.match(/```exercises\r?\n([\s\S]*?)```/);
+  if (!m) return [];
+  const list = yamlLoad(m[1], { schema: CORE_SCHEMA }) as Record<string, unknown>[];
+  if (!Array.isArray(list)) return [];
+  return list.map((e) => ({
+    type: String(e.type),
+    prompt: String(e.prompt),
+    answer: String(e.answer),
+    accept: Array.isArray(e.accept) ? e.accept.map(String) : [],
+    hint: e.hint != null ? String(e.hint) : null,
+  }));
+}

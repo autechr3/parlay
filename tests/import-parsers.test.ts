@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLessonFile, parseVocabCsv, parseVocabTables } from "../src/lib/import-parsers";
+import { parseLessonFile, parseVocabCsv, parseVocabTables, parseExercises } from "../src/lib/import-parsers";
 
 const FM = `---
 lesson: 04
@@ -61,4 +61,17 @@ describe("parseVocabTables", () => {
       { farsi: "رفتن", translit: "raftan", english: "to go", present_stem: "رو" },
     ]);
   });
+});
+
+describe("parseExercises", () => {
+  it("parses the fenced exercises yaml block", () => {
+    const md = "body\n\n```exercises\n- type: en_to_fa\n  prompt: I am going home\n  answer: من به خانه می‌روم\n  accept: [به خانه می‌روم]\n- type: cloze\n  prompt: من کتاب ___ خواندم\n  answer: را\n  hint: object marker\n```\n";
+    const ex = parseExercises(md);
+    expect(ex).toHaveLength(2);
+    expect(ex[0].type).toBe("en_to_fa");
+    expect(ex[0].accept).toEqual(["به خانه می‌روم"]);
+    expect(ex[1].hint).toBe("object marker");
+    expect(ex[1].accept).toEqual([]);
+  });
+  it("returns empty when absent", () => expect(parseExercises("no block here")).toEqual([]));
 });

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { parseLessonFile, parseVocabCsv, parseVocabTables } from "../src/lib/import-parsers";
+import { parseLessonFile, parseVocabCsv, parseVocabTables, parseExercises } from "../src/lib/import-parsers";
 import { ContentPackageSchema, importContentPackage } from "../src/lib/content-package";
 
 for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
@@ -48,6 +48,10 @@ async function main() {
             farsi: v.farsi, transliteration: v.translit, english: v.english,
             part_of_speech: v.present_stem ? "verb" : null,
             present_stem: v.present_stem ?? null })),
+      exercises: (() => {
+        const exs = parseExercises(l.body_md);
+        return exs.length ? exs : undefined;   // undefined = leave existing alone
+      })(),
     })),
   });
 
