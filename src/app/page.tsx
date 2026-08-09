@@ -13,9 +13,9 @@ export default async function Dashboard() {
     supabase.rpc("current_streak"),
     supabase.from("vocab_reviews").select("id", { count: "exact", head: true })
       .eq("user_id", uid).eq("suspended", false).lte("due_on", new Date().toISOString().slice(0, 10)),
-    supabase.from("profiles").select("target_lessons_per_week").eq("id", uid).single(),
+    supabase.from("profiles").select("target_lessons_per_week, timezone").eq("id", uid).single(),
     supabase.from("study_days").select("day, cards_reviewed, lessons_completed")
-      .eq("user_id", uid).gte("day", new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10)),
+      .eq("user_id", uid).gte("day", new Date(Date.now() - 91 * 864e5).toISOString().slice(0, 10)),
     supabase.from("lessons").select("id, number, title, slug").order("number"),
     supabase.from("lesson_completions").select("lesson_id, completed_at").eq("user_id", uid),
   ]);
@@ -23,6 +23,7 @@ export default async function Dashboard() {
   const doneIds = new Set((comps ?? []).map((c) => c.lesson_id));
   const next = (lessons ?? []).find((l) => !doneIds.has(l.id));
   const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7)); // Monday
+  weekStart.setHours(0, 0, 0, 0);
   const thisWeek = (comps ?? []).filter((c) => new Date(c.completed_at) >= weekStart).length;
   const tutorPrompt = next
     ? `We're doing Lesson ${next.number} of my Farsi curriculum: "${next.title}". Teach it interactively per the lesson plan, correct my Persian ruthlessly, and end with a session log of my errors and strengths.`
@@ -44,7 +45,7 @@ export default async function Dashboard() {
       )}
       <div className="rounded border p-4">
         <p className="mb-2 text-xs text-gray-500">last 90 days</p>
-        <Heatmap days={(days ?? []).map((d) => ({ day: d.day, count: d.cards_reviewed + d.lessons_completed * 10 }))} />
+        <Heatmap days={(days ?? []).map((d) => ({ day: d.day, count: d.cards_reviewed + d.lessons_completed * 10 }))} timeZone={profile?.timezone ?? "UTC"} />
       </div>
       <a href="/api/export" className="text-sm text-gray-500 underline">Export all my data (JSON)</a>
     </main>
