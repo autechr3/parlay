@@ -9,18 +9,30 @@ export function ImportForm() {
 
   async function run(confirm: boolean) {
     setBusy(true);
-    setOut(await importPackage(raw, confirm));
-    setBusy(false);
+    try {
+      setOut(await importPackage(raw, confirm));
+    } catch {
+      setOut({ ok: false, errors: ["Import request failed — the package may be too large (limit ~1MB) or the connection dropped. Try a smaller package."] });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <textarea value={raw} onChange={(e) => { setRaw(e.target.value); setOut(null); }}
+      <textarea disabled={busy} value={raw} onChange={(e) => { setRaw(e.target.value); setOut(null); }}
         placeholder='Paste your content-package JSON here ({"format":"farsi-tracker/content-package",...})'
         className="h-64 rounded border p-3 font-mono text-xs" />
-      <input type="file" accept=".json" onChange={async (e) => {
+      <input type="file" disabled={busy} accept=".json" onChange={async (e) => {
         const f = e.target.files?.[0];
-        if (f) { setRaw(await f.text()); setOut(null); }
+        if (f) {
+          try {
+            setRaw(await f.text());
+            setOut(null);
+          } catch {
+            setOut({ ok: false, errors: ["Could not read the selected file."] });
+          }
+        }
       }} />
       {!out?.ok || !out.preview ? (
         <button disabled={!raw || busy} onClick={() => run(false)}
