@@ -739,7 +739,7 @@ git add supabase && git commit -m "feat: grade_card SM-2, current_streak, get_re
   - `faNormalize(s: string): string` — MUST match SQL `fa_normalize` behavior exactly
   - `levenshtein(a: string, b: string): number`
   - `checkTypedAnswer(input: string, expected: string): { verdict: "exact" | "close" | "wrong" }` — compares normalized forms; `close` = levenshtein ≤ 1 (and not exact)
-  - `conjugatePresent(presentStem: string): string[]` — six forms `می‌ + stem + [م,ی,د,یم,ید,ند]`, inserting glide `ی` when the stem ends in `ا` or `و` (می‌آیم, می‌گویم)
+  - `conjugatePresent(presentStem: string): string[]` — six forms `می‌ + stem + [م,ی,د,یم,ید,ند]`, inserting glide `ی` for ا-final stems (می‌آیم) and for vowel-و stems in the known set گو/جو (می‌گویم); consonantal-و stems like رو get no glide (می‌روم)
   - `conjugatePast(pastStem: string): string[]` — six forms `stem + [م,ی,"",یم,ید,ند]` (3sg is the bare stem)
   - `PRONOUNS: string[]` — `['من','تو','او','ما','شما','آنها']`
 
@@ -854,8 +854,11 @@ export function checkTypedAnswer(input: string, expected: string) {
 const PRESENT_ENDINGS = ["م", "ی", "د", "یم", "ید", "ند"];
 const PAST_ENDINGS = ["م", "ی", "", "یم", "ید", "ند"];
 
+// و-final stems where the و is a vowel (u/ow) take the glide; consonantal و (رو rav-) does not
+const VAV_VOWEL_STEMS = new Set(["گو", "جو"]);
+
 export function conjugatePresent(presentStem: string): string[] {
-  const glide = /[او]$/.test(presentStem) ? "ی" : "";
+  const glide = /ا$/.test(presentStem) || VAV_VOWEL_STEMS.has(presentStem) ? "ی" : "";
   return PRESENT_ENDINGS.map((e) => `می${ZWNJ}${presentStem}${glide}${e}`);
 }
 
