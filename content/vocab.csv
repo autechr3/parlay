@@ -1,0 +1,191 @@
+lesson,farsi,translit,english,pos,present_stem,past_stem,colloquial
+1,سلام,salâm,hello,phrase,,,
+1,صبح بخیر,sobh bekheyr,good morning,phrase,,,
+1,شب بخیر,shab bekheyr,good night,phrase,,,
+1,خداحافظ,khodâhâfez,goodbye,phrase,,,خدافظ
+1,به سلامت,be salâmat,go safely,phrase,,,
+1,ممنون,mamnun,thank you,phrase,,,مرسی
+1,خواهش می‌کنم,khâhesh mikonam,you're welcome,phrase,,,
+1,بله,bale,yes,adv,,,آره
+1,نه,na,no,adv,,,
+1,اسم,esm,name,noun,,,
+1,آقا,âqâ,Mr. / sir,noun,,,
+1,خانم,khânom,Ms. / ma'am,noun,,,
+1,آمریکایی,âmrikâyi,American,adj,,,
+1,ایرانی,irâni,Iranian,adj,,,
+1,معلم,mo'allem,teacher,noun,,,
+1,مهندس,mohandes,engineer,noun,,,
+1,دانشجو,dâneshju,university student,noun,,,
+1,خوب,khub,good / well,adj,,,
+1,خسته,khaste,tired,adj,,,
+1,بودن,budan,to be,verb,هست,بود,
+2,کتاب,ketâb,book,noun,,,
+2,میز,miz,table / desk,noun,,,
+2,صندلی,sandali,chair,noun,,,
+2,در,dar,door,noun,,,
+2,پنجره,panjere,window,noun,,,
+2,خانه,khâne,house / home,noun,,,خونه
+2,اتاق,otâq,room,noun,,,
+2,ماشین,mâshin,car,noun,,,
+2,تلفن,telefon,telephone,noun,,,
+2,آب,âb,water,noun,,,
+2,نان,nân,bread,noun,,,نون
+2,چای,chây,tea,noun,,,
+2,مرد,mard,man,noun,,,
+2,زن,zan,woman,noun,,,
+2,بچه,bachche,child,noun,,,
+2,دوست,dust,friend,noun,,,
+2,شهر,shahr,city,noun,,,
+2,کشور,keshvar,country,noun,,,
+2,چیز,chiz,thing,noun,,,
+2,این,in,this,pron,,,
+2,آن,ân,that,pron,,,اون
+3,بزرگ,bozorg,big,adj,,,
+3,کوچک,kuchak,small,adj,,,کوچیک
+3,جدید,jadid,new,adj,,,
+3,قدیمی,qadimi,old (things),adj,,,
+3,پیر,pir,old (people),adj,,,
+3,جوان,javân,young,adj,,,جوون
+3,زیبا,zibâ,beautiful,adj,,,
+3,قشنگ,qashang,pretty / lovely,adj,,,
+3,گران,gerân,expensive,adj,,,گرون
+3,ارزان,arzân,cheap,adj,,,ارزون
+3,سرد,sard,cold,adj,,,
+3,گرم,garm,warm / hot,adj,,,
+3,بلند,boland,tall / long / loud,adj,,,
+3,کوتاه,kutâh,short,adj,,,
+3,سخت,sakht,hard / difficult,adj,,,
+3,آسان,âsân,easy,adj,,,راحت
+3,جالب,jâleb,interesting,adj,,,
+3,مهم,mohem,important,adj,,,
+4,رفتن,raftan,to go,verb,رو,رفت,می‌رم
+4,آمدن,âmadan,to come,verb,آ,آمد,اومدم
+4,خوردن,khordan,to eat / to drink,verb,خور,خورد,
+4,دیدن,didan,to see,verb,بین,دید,
+4,گفتن,goftan,to say,verb,گو,گفت,می‌گم
+4,خواندن,khândan,to read / to sing,verb,خوان,خواند,می‌خونم
+4,نوشتن,neveshtan,to write,verb,نویس,نوشت,
+4,کردن,kardan,to do / to make,verb,کن,کرد,
+4,خواستن,khâstan,to want,verb,خواه,خواست,می‌خوام
+4,دانستن,dânestan,to know (a fact),verb,دان,دانست,می‌دونم
+4,داشتن,dâshtan,to have,verb,دار,داشت,
+4,کار کردن,kâr kardan,to work,verb,کن,کرد,
+4,صحبت کردن,sohbat kardan,to speak,verb,کن,کرد,حرف زدن
+4,امروز,emruz,today,adv,,,
+4,هر روز,har ruz,every day,adv,,,
+4,الان,alân,now,adv,,,
+4,همیشه,hamishe,always,adv,,,
+4,معمولاً,ma'mulan,usually,adv,,,
+4,خیلی,kheyli,very / a lot,adv,,,
+4,به,be,to,prep,,,
+4,از,az,from,prep,,,
+4,دانشگاه,dâneshgâh,university,noun,,,
+4,سر کار,sar-e kâr,to/at work,phrase,,,
+5,چه / چی,che / chi,what,pron,,,
+5,کی,ki,who,pron,,,
+5,کِی,key,when,adv,,,
+5,کجا,kojâ,where,adv,,,
+5,چرا,cherâ,why,adv,,,
+5,چطور,chetor,how,adv,,,
+5,چند,chand,how many,adv,,,
+5,چقدر,cheqadr,how much,adv,,,چقد
+5,کدام,kodâm,which,adv,,,کدوم
+5,آیا,âyâ,(question particle),particle,,,
+5,خیر,kheyr,no (formal),adv,,,
+5,شاید,shâyad,maybe,adv,,,
+5,البته,albatte,of course,adv,,,
+5,حتماً,hatman,definitely,adv,,,
+5,اما,ammâ,but,conj,,,
+6,صفر,sefr,zero,number,,,
+6,یک,yek,one,number,,,یه
+6,دو,do,two,number,,,
+6,سه,se,three,number,,,
+6,چهار,chahâr,four,number,,,چار
+6,پنج,panj,five,number,,,
+6,شش,shesh,six,number,,,شیش
+6,هفت,haft,seven,number,,,
+6,هشت,hasht,eight,number,,,
+6,نه,noh,nine,number,,,
+6,ده,dah,ten,number,,,
+6,یازده,yâzdah,eleven,number,,,
+6,دوازده,davâzdah,twelve,number,,,
+6,سیزده,sizdah,thirteen,number,,,
+6,چهارده,chahârdah,fourteen,number,,,
+6,پانزده,pânzdah,fifteen,number,,,پونزده
+6,شانزده,shânzdah,sixteen,number,,,شونزده
+6,هفده,hefdah,seventeen,number,,,هیفده
+6,هجده,hejdah,eighteen,number,,,هیجده
+6,نوزده,nuzdah,nineteen,number,,,
+6,بیست,bist,twenty,number,,,
+6,تا,tâ,(counter),particle,,,
+6,نفر,nafar,(counter for people),noun,,,
+6,سال,sâl,year,noun,,,
+6,تومان,tomân,toman (currency),noun,,,تومن
+7,خریدن,kharidan,to buy,verb,خر,خرید,
+7,فروختن,forukhtan,to sell,verb,فروش,فروخت,
+7,دادن,dâdan,to give,verb,ده,داد,
+7,گرفتن,gereftan,to take / get,verb,گیر,گرفت,
+7,آوردن,âvardan,to bring,verb,آور,آورد,میارم
+7,بردن,bordan,to take away / carry,verb,بر,برد,
+7,بستن,bastan,to close,verb,بند,بست,
+7,شناختن,shenâkhtan,to know (a person),verb,شناس,شناخت,
+7,باز کردن,bâz kardan,to open,verb,کن,کرد,
+7,دوست داشتن,dust dâshtan,to like / to love,verb,دار,داشت,دوستت دارم
+7,را,râ,(object marker),particle,,,رو
+8,رویِ,ru-ye,on,prep,,,رو
+8,زیرِ,zir-e,under,prep,,,
+8,کنارِ,kenâr-e,next to,prep,,,
+8,پشتِ,posht-e,behind,prep,,,
+8,جلویِ,jelo-ye,in front of,prep,,,
+8,بینِ,beyn-e,between,prep,,,
+8,داخلِ,dâkhel-e,inside,prep,,,
+8,نزدیکِ,nazdik-e,near,prep,,,
+8,در,dar,in,prep,,,تو
+8,با,bâ,with,prep,,,
+8,بی,bi,without,prep,,,
+8,برای,barâye,for,prep,,,برا
+8,اینجا,injâ,here,adv,,,
+8,آنجا,ânjâ,there,adv,,,اونجا
+8,آدرس,âdres,address,noun,,,
+8,هست,hast,there is,verb,,,
+8,نیست,nist,there isn't / is not,verb,,,
+9,سی,si,thirty,number,,,
+9,چهل,chehel,forty,number,,,
+9,پنجاه,panjâh,fifty,number,,,
+9,شصت,shast,sixty,number,,,
+9,هفتاد,haftâd,seventy,number,,,
+9,هشتاد,hashtâd,eighty,number,,,
+9,نود,navad,ninety,number,,,
+9,صد,sad,hundred,number,,,
+9,شنبه,shanbe,Saturday,noun,,,
+9,یکشنبه,yekshanbe,Sunday,noun,,,
+9,دوشنبه,doshanbe,Monday,noun,,,
+9,سه‌شنبه,seshanbe,Tuesday,noun,,,
+9,چهارشنبه,chahârshanbe,Wednesday,noun,,,
+9,پنجشنبه,panjshanbe,Thursday,noun,,,
+9,جمعه,jom'e,Friday,noun,,,
+9,ساعت,sâ'at,hour / clock / watch,noun,,,
+9,دقیقه,daqiqe,minute,noun,,,
+9,نیم,nim,half,noun,,,
+9,ربع,rob',quarter,noun,,,
+9,صبح,sobh,morning,noun,,,
+9,ظهر,zohr,noon,noun,,,
+9,بعدازظهر,ba'd-az-zohr,afternoon,noun,,,
+9,عصر,asr,late afternoon,noun,,,
+9,شب,shab,night,noun,,,
+9,نصف شب,nesf-e shab,midnight,noun,,,نصفه‌شب
+9,هفته,hafte,week,noun,,,
+9,ماه,mâh,month / moon,noun,,,
+9,دیروز,diruz,yesterday,adv,,,
+9,فردا,fardâ,tomorrow,adv,,,
+9,امشب,emshab,tonight,adv,,,
+10,شدن,shodan,to become,verb,شو,شد,می‌شم
+10,پریروز,pariruz,day before yesterday,adv,,,
+10,دیشب,dishab,last night,adv,,,
+10,هفته‌ی پیش,hafte-ye pish,last week,adv,,,
+10,ماه پیش,mâh-e pish,last month,adv,,,
+10,پارسال,pârsâl,last year,adv,,,
+10,قبلاً,qablan,previously,adv,,,
+10,وقتی که,vaqti ke,when (conjunction),conj,,,
+10,نفهمیدم,nafahmidam,I didn't understand,phrase,,,
+10,یادم رفت,yâdam raft,I forgot,phrase,,,
