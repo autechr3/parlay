@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seed": "tsx scripts/seed-lessons.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -21,7 +22,8 @@
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
