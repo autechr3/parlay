@@ -1,0 +1,299 @@
+# Farsi Progress Tracker — Design Spec
+
+**Date:** 2026-08-09
+**Status:** Approved by user
+
+## What this is
+
+A personal (single-user, but built multi-user-correctly) web app that tracks progress through a structured Farsi curriculum. Lessons are authored as markdown files and taught by a separate AI tutor — **this app does not teach.** It tracks, reviews, and reminds.
+
+Three jobs, in priority order:
+
+1. **Spaced-repetition vocabulary review** — the daily driver (`/review`).
+2. **Progress tracking** — lesson completions, self-assessment scores over time, streaks.
+3. **A daily reminder email** — a hard requirement, not a nice-to-have.
+
+## Decisions made during design review
+
+These amend or resolve open points in the original build spec:
+
+1. **Supabase is the source of truth for all persistent data.** The seed script is an *importer*, not an ongoing sync. It upserts units/lessons from markdown frontmatter (including the full lesson body into `lessons.body_md`) and vocabulary from `vocab.csv` when present, falling back to parsing a lesson's vocabulary tables when it isn't. After import, the app reads only from the DB. Future lesson batches are imported the same way; ad-hoc vocab additions happen in the app.
+2. **Local-first development, cloud as we go.** All development and testing runs against a local Supabase stack (`supabase start`). Work pauses at the email step for the user to create a Resend account and verify a sending domain, so the email path is tested for real. Cloud Supabase and Vercel are provisioned at deploy time.
+3. **Manual vocab writes go through a server action** that verifies the session and then uses the service role, keeping `vocab_items` write-protected from clients while still allowing in-app adds and suspend/unsuspend.
+4. **Initial content:** 10 lesson files (L01–L10) and a 190-row `vocab.csv` whose columns (`lesson, farsi, translit, english, pos, present_stem, past_stem, colloquial`) map 1:1 onto `vocab_items`. The existing `progress.md` is an empty template — nothing to migrate. Source files are copied into the repo under `content/lessons/` and `content/vocab.csv` for import.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js (App Router, TypeScript) + Tailwind |
+| Backend/DB | Supabase (Postgres, Auth, RLS, Edge Functions) |
+| Scheduling | `pg_cron` inside Supabase |
+| Email | Resend |
+| Hosting | Vercel |
+| Auth | Supabase Auth, magic link + Google |
+
+Keep it boring. No state-management library — server components and `@supabase/ssr` are enough. No ORM; SQL migrations written by hand in `supabase/migrations/`.
+
+## Persian text handling (read before writing any UI)
+
+- **Directionality.** App chrome is English/LTR. Never set `dir="rtl"` globally; set it per element on Persian content: `<span dir="rtl" lang="fa" className="font-fa">…</span>`. Mixed-direction inline content (a Persian word inside an English sentence) must be wrapped in `<bdi>` or punctuation visually scrambles.
+- **Font.** Vazirmatn, self-hosted via `next/font/local`. System fonts render Persian badly on Windows and Android.
+- **ZWNJ.** U+200C is invisible and semantically required inside words (`می‌روم`, `کتاب‌ها`). Never strip it, never `.trim()` it away, never collapse it in normalization for display or storage.
+- **Search normalization.** Arabic and Persian share visually identical but distinct codepoints (ي U+064A vs ی U+06CC; ك U+0643 vs ک U+06A9; ة U+0629 vs ه U+0647). A `farsi_normalized` generated column maps Arabic forms to Persian, strips diacritics (U+064B–U+0652), and normalizes ZWNJ to a space **for search only** — indexed with `pg_trgm` GIN (Postgres has no Persian FTS config). Never displayed.
+- **Digits.** Persian digits ۰–۹ (U+06F0–U+06F9). Helpers `toPersianDigits()` / `toWesternDigits()` used at the render boundary only; numbers stored as numbers.
+- **Ezâfe.** Vocab may carry kasre (U+0650) as a teaching aid. Diacritics are stripped for comparison when grading typed answers.
+
+## Data model
+
+```sql
+-- ============ profiles ============
+create table profiles (
+  id uuid primary key references auth.users on delete cascade,
+  email text not null,
+  display_name text,
+  timezone text not null default 'America/New_York',
+  daily_email_enabled boolean not null default true,
+  daily_email_hour smallint not null default 7,   -- local hour, 0–23
+  target_lessons_per_week smallint not null default 5,
+  daily_new_limit smallint not null default 20,
+  daily_review_limit smallint not null default 120,
+  created_at timestamptz not null default now()
+);
+
+-- ============ curriculum ============
+create table units (
+  id serial primary key,
+  number smallint not null unique,
+  title text not null,
+  description text
+);
+
+create table lessons (
+  id serial primary key,
+  number smallint not null unique,          -- 1..N, matches L01 etc.
+  unit_id int references units(id),
+  title text not null,
+  slug text not null unique,                -- 'ezafe-the-persian-glue'
+  filename text,                            -- 'L03-ezafe-the-persian-glue.md'
+  grammar_points text[] not null default '{}',
+  new_vocab_count smallint,
+  estimated_minutes smallint not null default 60,
+  is_review boolean not null default false,
+  is_assessment boolean not null default false,
+  body_md text                              -- full markdown; always populated by importer
+);
+
+-- ============ progress ============
+create table lesson_completions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  lesson_id int not null references lessons(id),
+  completed_at timestamptz not null default now(),
+  minutes_spent smallint,
+  homework_done boolean not null default false,
+  negar_drill_done boolean not null default false,
+  confidence smallint check (confidence between 1 and 5),
+  notes text,
+  unique (user_id, lesson_id)
+);
+
+-- free-form log the AI tutor writes at the end of a session
+create table practice_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  lesson_id int references lessons(id),
+  occurred_at timestamptz not null default now(),
+  duration_minutes smallint,
+  mode text not null default 'lesson',   -- lesson | quiz | conversation | negar
+  errors text[],                          -- ['dropped را', 'verb not final']
+  strengths text[],
+  raw_log text
+);
+
+-- self-ratings from assessment lessons; one row per skill per assessment
+create table skill_ratings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  lesson_id int references lessons(id),
+  skill text not null,                    -- 'ezafe', 'ra', 'present_stems', ...
+  rating smallint not null check (rating between 1 and 5),
+  rated_at timestamptz not null default now()
+);
+
+-- ============ vocabulary + SRS ============
+create table vocab_items (
+  id uuid primary key default gen_random_uuid(),
+  farsi text not null,
+  farsi_normalized text generated always as (fa_normalize(farsi)) stored,
+  transliteration text not null,
+  english text not null,
+  part_of_speech text,                    -- noun | verb | adj | adv | prep | phrase | number
+  present_stem text,                      -- verbs only
+  past_stem text,                         -- verbs only
+  colloquial text,                        -- spoken form if it differs
+  lesson_id int references lessons(id),
+  tags text[] not null default '{}',
+  notes text
+);
+
+create index on vocab_items using gin (farsi_normalized gin_trgm_ops);
+
+-- SM-2 state, one row per user per item
+create table vocab_reviews (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  vocab_id uuid not null references vocab_items(id) on delete cascade,
+  ease numeric(4,2) not null default 2.5,
+  interval_days int not null default 0,
+  repetitions int not null default 0,
+  due_on date not null default current_date,
+  last_reviewed_at timestamptz,
+  lapses int not null default 0,
+  suspended boolean not null default false,
+  unique (user_id, vocab_id)
+);
+
+create index on vocab_reviews (user_id, due_on) where not suspended;
+
+create table review_log (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  vocab_id uuid not null references vocab_items(id) on delete cascade,
+  reviewed_at timestamptz not null default now(),
+  grade smallint not null check (grade between 0 and 5),
+  direction text not null,                -- 'fa_to_en' | 'en_to_fa' | 'stem' | 'audio'
+  ms_taken int
+);
+
+-- ============ streaks ============
+create table study_days (
+  user_id uuid not null references profiles(id) on delete cascade,
+  day date not null,
+  lessons_completed smallint not null default 0,
+  cards_reviewed smallint not null default 0,
+  primary key (user_id, day)
+);
+
+-- ============ email dedup ============
+create table email_log (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  kind text not null,                     -- 'daily_reminder' | 'weekly_digest'
+  sent_on date not null,                  -- user-local date
+  sent_at timestamptz not null default now(),
+  unique (user_id, kind, sent_on)
+);
+```
+
+**RLS on every user-scoped table** (`profiles`, `lesson_completions`, `practice_sessions`, `skill_ratings`, `vocab_reviews`, `review_log`, `study_days`, `email_log`): `using (auth.uid() = user_id)` for select/insert/update/delete (`profiles` keys on `id`). `units`, `lessons`, `vocab_items` are shared reference data — readable by any authenticated user, writable only by service role.
+
+`fa_normalize(text)` is an **immutable** SQL function doing the Arabic→Persian mapping, diacritic stripping, and ZWNJ→space normalization (immutability is required for the generated column).
+
+## SRS algorithm
+
+SM-2, lightly modified, implemented as Postgres function `grade_card(p_vocab_id uuid, p_grade smallint)` so the logic lives in one place:
+
+```
+grade 0–2 (failed):
+  repetitions = 0
+  interval    = 1
+  lapses      = lapses + 1
+  ease        = max(1.3, ease - 0.20)
+
+grade 3–5 (passed):
+  repetitions = repetitions + 1
+  interval    = case repetitions
+                  when 1 then 1
+                  when 2 then 6
+                  else round(interval * ease)
+                end
+  ease        = ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02))
+  ease        = clamp(ease, 1.3, 2.8)
+
+due_on = current_date + interval
+```
+
+Interval capped at 365 days. New cards enter with `due_on = today`. `grade_card` also upserts the day's `study_days.cards_reviewed` and appends to `review_log`.
+
+**Daily limits:** 20 new cards, 120 reviews (per-user, adjustable in `/settings` via `profiles.daily_new_limit` / `daily_review_limit`). Reviews first, then new.
+
+**Review directions,** rotated per card based on `repetitions`:
+- Recognition (فارسی → English) — always available
+- Production (English → فارسی, typed in script) — unlocks after 2 successful recognitions
+- Verb stems (infinitive → present stem → past stem) — `part_of_speech = 'verb'` only; weighted up
+
+**Grading typed answers:** compare with diacritics stripped and ZWNJ normalized. Levenshtein ≤ 1 on the normalized form is accepted as grade 3 with a "close — check the spelling" note, not a failure.
+
+## Screens
+
+- **`/` Dashboard** — streak, cards due today, next lesson with one-click "start" that copies a ready-made tutor prompt to the clipboard, this week's progress vs the weekly target, 90-day study heatmap.
+- **`/review`** — the main loop. One card at a time, keyboard-driven (space to reveal, 1–4 to grade), Persian-script input for production cards, progress bar, session summary. The due queue is fetched once server-side; the session then runs fully client-side with the next card prefetched. Grades are always written to an IndexedDB queue and synced in the background — one mechanism covers both "no spinner between cards" and offline tolerance. No layout shift on reveal; must feel instant.
+- **`/lessons`** — grid by unit showing status (locked / available / complete), confidence, completion date. Clicking one renders `body_md` plus a completion form. Next lesson gated behind current completion, with an explicit override (nudge, not jail).
+- **`/vocab`** — searchable/filterable table of all items with SRS state. Persian search via the trigram index; filters by lesson/POS/tag; manual add; suspend/unsuspend.
+- **`/progress`** — skill ratings over time (line chart per skill), ranked error-frequency list from `practice_sessions.errors` (the most useful thing on the page), vocabulary retention rate, total study time.
+- **`/settings`** — timezone, email on/off, delivery hour, weekly target, daily card limits.
+- **Data export** — a button that dumps all the user's tables to JSON.
+
+## Daily reminder email
+
+Architecture: `pg_cron` hourly → `net.http_post` to a `daily-reminder` Edge Function (service-role auth) → the function selects users whose local hour matches `daily_email_hour`, skipping anyone already sent today (checked against `email_log`, but the `(user_id, kind, sent_on)` unique constraint is what actually guarantees no double-sends) → builds and sends via Resend → logs the send.
+
+Selection query:
+
+```sql
+select p.*
+from profiles p
+where p.daily_email_enabled
+  and extract(hour from (now() at time zone p.timezone)) = p.daily_email_hour
+  and not exists (
+    select 1 from email_log e
+    where e.user_id = p.id
+      and e.kind = 'daily_reminder'
+      and e.sent_on = (now() at time zone p.timezone)::date
+  );
+```
+
+**Content, in priority order:**
+1. Cards due today, linking to `/review`
+2. Today's lesson — number, title, tutor prompt ready to copy
+3. Current streak, stated plainly
+4. One warm-up drill — three items from today's due cards, answers hidden behind a link
+5. A Negar drill nudge if the last completed lesson has `negar_drill_done = false`
+
+Short and mostly text. Persian content gets `dir="rtl"` on its container and a Vazirmatn CDN webfont link with serif fallback; must remain legible if the client ignores the font. Sent from a verified Resend domain. Working unsubscribe link flips `daily_email_enabled`.
+
+**Weekly Sunday digest** on the same infrastructure (different cron expression): lessons completed vs target, retention rate, top three errors of the week, what's coming next week.
+
+## Importer
+
+`scripts/seed-lessons.ts` walks `content/lessons/`, parses YAML frontmatter, and upserts `units`, `lessons` (including full `body_md`), and `vocab_items`. Vocabulary comes from `content/vocab.csv` when it covers a lesson; otherwise the script parses that lesson's markdown vocabulary tables (`| farsi | translit | english |` under the vocabulary heading; verb tables shaped infinitive/stem/meaning/1sg populate `present_stem`). Idempotent and re-runnable: matched on `lessons.number` and `(vocab_items.farsi, lesson_id)`. Runs with the service role key against local or cloud.
+
+## Non-functional requirements
+
+- **Review speed:** full keyboard control, no layout shift, no spinner between cards, next card prefetched. Over ~1s per card kills the habit.
+- **Mobile:** review happens on phones — Persian input must work with a phone keyboard; grade buttons thumb-sized.
+- **No gamification:** a streak number and honest charts. No badges, confetti, or XP.
+- **Data ownership:** JSON export of all user tables.
+- **Offline-tolerant review:** grades queue in IndexedDB and sync on reconnect.
+
+## Don't build
+
+Audio recording/playback, a lesson editor, social features, an in-app AI tutor, a mobile app.
+
+## Testing
+
+- **Vitest** for pure logic: SM-2 math (mirrored expectations against the SQL function's spec), `fa_normalize` behavior, digit helpers, typed-answer grading incl. Levenshtein near-miss, frontmatter/CSV/markdown-table parsers.
+- **SQL tests** against local Supabase for `grade_card` state transitions and RLS policies (user A cannot read user B's rows; anon cannot read reference data).
+- **Playwright** smoke test of the review loop keyboard flow.
+
+## Build order
+
+1. Supabase project (local), migrations, `fa_normalize`, RLS policies
+2. Auth + `/settings`
+3. Importer; run against the ten existing lessons + `vocab.csv`
+4. `/review` with the `grade_card` function — core loop before anything else
+5. `/lessons` and `/progress`
+6. Daily email Edge Function + cron *(user sets up Resend here)*
+7. `/vocab`, heatmap, weekly digest, JSON export
+8. Deploy: cloud Supabase + Vercel; env vars `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`
