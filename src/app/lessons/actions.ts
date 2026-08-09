@@ -20,14 +20,22 @@ export async function completeLesson(formData: FormData) {
   // Tolerate re-submits: a unique-violation on (user_id, lesson_id) means this lesson
   // was already marked complete. PostgREST surfaces that as Postgres error code 23505
   // with a "duplicate key value violates unique constraint" message — check both.
-  if (error && error.code !== "23505" && !error.message.includes("duplicate")) throw error;
-  await supabase.rpc("bump_study_day");
+  const isDuplicate = !!error && (error.code === "23505" || error.message.includes("duplicate"));
+  if (error && !isDuplicate) throw error;
+  if (!isDuplicate) {
+    const { error: bumpErr } = await supabase.rpc("bump_study_day");
+    if (bumpErr) throw bumpErr;
+  }
   for (const [k, v] of formData.entries()) {
-    if (k.startsWith("skill:") && Number(v) >= 1) {
-      await supabase.from("skill_ratings").insert({
-        user_id: user.id, lesson_id: lessonId,
-        skill: k.slice(6), rating: Number(v),
-      });
+    if (k.startsWith("skill:")) {
+      const n = Number(v);
+      if (Number.isInteger(n) && n >= 1 && n <= 5) {
+        const { error: skillErr } = await supabase.from("skill_ratings").insert({
+          user_id: user.id, lesson_id: lessonId,
+          skill: k.slice(6), rating: n,
+        });
+        if (skillErr) throw skillErr;
+      }
     }
   }
   revalidatePath("/lessons");
