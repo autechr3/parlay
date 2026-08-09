@@ -29,24 +29,30 @@ export function makeGradeRpc(supabase: {
 }
 
 export class GradeQueue {
-  #flushing = false;
+  #chain: Promise<unknown> = Promise.resolve();
   constructor(
     private store: KVStore,
     private rpc: (g: PendingGrade) => Promise<void>,
   ) {}
 
+  #serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.#chain.then(fn, fn);
+    this.#chain = next.catch(() => {});
+    return next;
+  }
+
   async enqueue(g: Omit<PendingGrade, "id">): Promise<void> {
-    const list = (await this.store.get(KEY)) ?? [];
-    list.push({ ...g, id: crypto.randomUUID() });
-    await this.store.set(KEY, list);
+    await this.#serialize(async () => {
+      const list = (await this.store.get(KEY)) ?? [];
+      list.push({ ...g, id: crypto.randomUUID() });
+      await this.store.set(KEY, list);
+    });
     await this.flush();
   }
 
   async flush(): Promise<{ sent: number; remaining: number }> {
-    if (this.#flushing) return { sent: 0, remaining: await this.pendingCount() };
-    this.#flushing = true;
-    let sent = 0;
-    try {
+    return this.#serialize(async () => {
+      let sent = 0;
       let list = (await this.store.get(KEY)) ?? [];
       while (list.length > 0) {
         try { await this.rpc(list[0]); }
@@ -56,7 +62,7 @@ export class GradeQueue {
         sent++;
       }
       return { sent, remaining: list.length };
-    } finally { this.#flushing = false; }
+    });
   }
 
   async pendingCount(): Promise<number> {
