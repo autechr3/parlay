@@ -18,6 +18,7 @@ export type LessonOption = { id: number; number: number };
 
 type Props = {
   items: VocabItem[]; reviews: VocabReview[]; lessons: LessonOption[]; initialQuery: string;
+  initialLesson?: string; initialPos?: string;
 };
 
 function lessonNumber(item: VocabItem): number | null {
@@ -26,7 +27,7 @@ function lessonNumber(item: VocabItem): number | null {
   return Array.isArray(l) ? (l[0]?.number ?? null) : l.number;
 }
 
-export function VocabTable({ items, reviews, lessons, initialQuery }: Props) {
+export function VocabTable({ items, reviews, lessons, initialQuery, initialLesson = "", initialPos = "" }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [farsiInput, setFarsiInput] = useState("");
   const [showAddKeyboard, setShowAddKeyboard] = useState(false);
@@ -45,13 +46,13 @@ export function VocabTable({ items, reviews, lessons, initialQuery }: Props) {
             className="min-w-56 flex-1 rounded border p-2 font-fa" autoComplete="off" />
           <button type="button" onClick={() => setShowSearchKeyboard((v) => !v)}
             className="rounded border px-3 py-2">{showSearchKeyboard ? "hide keyboard" : "کیبورد"}</button>
-          <select name="lesson" defaultValue="" className="rounded border p-2">
+          <select name="lesson" defaultValue={initialLesson} className="rounded border p-2">
             <option value="">All lessons</option>
             {lessons.map((l) => (
-              <option key={l.id} value={l.id}>L{String(l.number).padStart(2, "0")}</option>
+              <option key={l.id} value={String(l.id)}>L{String(l.number).padStart(2, "0")}</option>
             ))}
           </select>
-          <select name="pos" defaultValue="" className="rounded border p-2">
+          <select name="pos" defaultValue={initialPos} className="rounded border p-2">
             <option value="">All parts of speech</option>
             {POS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>

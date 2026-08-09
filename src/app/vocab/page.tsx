@@ -13,9 +13,12 @@ export default async function VocabPage({ searchParams }:
     .order("farsi").limit(500);
   if (q) {
     const isFa = /[\u0600-\u06FF]/.test(q);
-    query = isFa
-      ? query.ilike("farsi_normalized", `%${faNormalize(q)}%`)
-      : query.or(`english.ilike.%${q}%,transliteration.ilike.%${q}%`);
+    if (isFa) {
+      query = query.ilike("farsi_normalized", `%${faNormalize(q)}%`);
+    } else {
+      const safe = q.replace(/[,()"]/g, " ");
+      query = query.or(`english.ilike.%${safe}%,transliteration.ilike.%${safe}%`);
+    }
   }
   if (lesson) query = query.eq("lesson_id", Number(lesson));
   if (pos) query = query.eq("part_of_speech", pos);
@@ -25,5 +28,5 @@ export default async function VocabPage({ searchParams }:
   const { data: lessons } = await supabase.from("lessons").select("id, number").order("number");
 
   return <VocabTable items={items ?? []} reviews={reviews ?? []} lessons={lessons ?? []}
-    initialQuery={q ?? ""} />;
+    initialQuery={q ?? ""} initialLesson={lesson ?? ""} initialPos={pos ?? ""} />;
 }
