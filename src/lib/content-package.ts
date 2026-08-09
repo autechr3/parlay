@@ -64,7 +64,8 @@ export async function importContentPackage(
       { onConflict: "course_id,number" });
     if (error) throw error;
   }
-  const { data: units } = await supabase.from("units").select("id, number").eq("course_id", courseId);
+  const { data: units, error: uErr } = await supabase.from("units").select("id, number").eq("course_id", courseId);
+  if (uErr) throw uErr;
   const unitId = new Map((units ?? []).map((u) => [u.number, u.id]));
 
   let vocabCount = 0, exCount = 0;
@@ -92,7 +93,8 @@ export async function importContentPackage(
     }
 
     if (l.exercises) {  // replace-per-lesson, only when provided
-      await supabase.from("exercises").delete().eq("lesson_id", lesson.id);
+      const { error: delErr } = await supabase.from("exercises").delete().eq("lesson_id", lesson.id);
+      if (delErr) throw delErr;
       if (l.exercises.length) {
         const { error } = await supabase.from("exercises").insert(
           l.exercises.map((e, i) => ({ course_id: courseId, lesson_id: lesson.id,
@@ -105,8 +107,9 @@ export async function importContentPackage(
   }
 
   // first course becomes the active one
-  await supabase.from("profiles").update({ active_course_id: courseId })
+  const { error: pErr } = await supabase.from("profiles").update({ active_course_id: courseId })
     .eq("id", ownerId).is("active_course_id", null);
+  if (pErr) throw pErr;
 
   return { courseId, units: unitNumbers.size, lessons: pkg.lessons.length,
            vocab: vocabCount, exercises: exCount };
