@@ -181,6 +181,32 @@ create table study_days (
   primary key (user_id, day)
 );
 
+-- ============ exercises ============
+-- Authored per lesson by the lesson generator (fenced ```exercises yaml block in the
+-- lesson markdown); imported by the seed script. Conjugation drills are NOT stored —
+-- the app auto-generates them from that lesson's verb stems.
+create table exercises (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id int not null references lessons(id) on delete cascade,
+  position smallint not null,
+  type text not null check (type in ('en_to_fa','fa_to_en','cloze','scramble')),
+  prompt text not null,     -- en_to_fa: English source · fa_to_en: Farsi source ·
+                            -- cloze: Persian sentence containing ___ · scramble: English gloss
+  answer text not null,     -- expected answer (Farsi except fa_to_en; scramble: full Persian sentence)
+  accept text[] not null default '{}',  -- alternative accepted answers
+  hint text,
+  unique (lesson_id, position)
+);
+
+create table exercise_attempts (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  exercise_id uuid not null references exercises(id) on delete cascade,
+  correct boolean not null,
+  answer_given text,
+  attempted_at timestamptz not null default now()
+);
+
 -- ============ email dedup ============
 create table email_log (
   id bigserial primary key,
@@ -236,6 +262,13 @@ Interval capped at 365 days. New cards enter with `due_on = today`. `grade_card`
 - **`/` Dashboard** — streak, cards due today, next lesson with one-click "start" that copies a ready-made tutor prompt to the clipboard, this week's progress vs the weekly target, 90-day study heatmap.
 - **`/review`** — the main loop. One card at a time, keyboard-driven (space to reveal, 1–4 to grade), Persian-script input for production cards, progress bar, session summary. The due queue is fetched once server-side; the session then runs fully client-side with the next card prefetched. Grades are always written to an IndexedDB queue and synced in the background — one mechanism covers both "no spinner between cards" and offline tolerance. No layout shift on reveal; must feel instant.
 - **`/lessons`** — grid by unit showing status (locked / available / complete), confidence, completion date. Clicking one renders `body_md` plus a completion form. Next lesson gated behind current completion, with an explicit override (nudge, not jail).
+- **`/lessons/[slug]/practice`** — interactive exercise player for a lesson. Five exercise types:
+  1. **en_to_fa** — English prompt, type the Farsi (script) with `<FaKeyboard>`; validated by `checkTypedAnswer` (near-miss = "close — check the spelling").
+  2. **fa_to_en** — Farsi prompt, type the English; validated case-insensitively with punctuation stripped, against `answer` + `accept` alternatives, Levenshtein ≤ 1 tolerated.
+  3. **cloze** — Persian sentence with `___`; type the missing word (drills را, ezâfe, endings).
+  4. **scramble** — Persian words as tap-to-arrange tiles; correct = matches `answer` token order (drills verb-final order).
+  5. **conjugation** — auto-generated from the lesson's verbs (random pronoun + infinitive → type the conjugated present/past form); not stored in `exercises`.
+  Attempts are logged to `exercise_attempts`. Exercise content is authored by the **lesson generator** as a fenced ` ```exercises ` YAML block in the lesson markdown (list of `{type, prompt, answer, accept?, hint?}`); the importer parses it. `GENERATE_LESSONS.md` (the external generator prompt) gets a section defining this format so future batches include exercises; the existing 10 lessons have none yet (conjugation drills still work — they're auto-generated).
 - **`/flashcards`** — free cram mode, separate from SRS (no effect on `vocab_reviews` scheduling). Pulls **only from lessons the user has learned** (completed lessons, plus the current in-progress lesson). Deck picker: choose one or more learned lessons and a deck type — **vocabulary** (one card per vocab item) or **verb conjugations** (one card per verb; front = infinitive + pronoun prompt, back = full six-form conjugation table from `conjugatePresent`/`conjugatePast`). Cards shuffle; flipping uses the `<FarsiText>` cycle (script → translit → English). Keyboard: space flips, arrows navigate. Used between lessons for memorization.
 - **`/vocab`** — searchable/filterable table of all items with SRS state. Persian search via the trigram index; filters by lesson/POS/tag; manual add; suspend/unsuspend.
 - **`/progress`** — skill ratings over time (line chart per skill), ranked error-frequency list from `practice_sessions.errors` (the most useful thing on the page), vocabulary retention rate, total study time.
