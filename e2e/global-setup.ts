@@ -57,6 +57,10 @@ export default async function globalSetup() {
     );
   if (completionsErr) throw new Error(`failed to upsert lesson_completions: ${completionsErr.message}`);
 
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url ?? "")) {
+    throw new Error(`e2e global setup refuses to run against non-local Supabase: ${url} — it deletes review history for the test user.`);
+  }
+
   const { error: reviewLogErr } = await supabase.from("review_log").delete().eq("user_id", userId);
   if (reviewLogErr) throw new Error(`failed to clear review_log: ${reviewLogErr.message}`);
   const { error: vocabReviewsErr } = await supabase.from("vocab_reviews").delete().eq("user_id", userId);
