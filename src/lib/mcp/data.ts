@@ -283,8 +283,14 @@ export async function addVocab(userId: string, item: VocabInput): Promise<string
   if (pErr) throw pErr;
   if (!profile?.active_course_id) throw new Error("no active course — import one first");
 
+  // active_course_id is user-mutable via PostgREST; verify ownership before the admin-client write
+  const { data: ownedCourse, error: cErr } = await admin.from("courses")
+    .select("id").eq("id", profile.active_course_id).eq("owner_id", userId).maybeSingle();
+  if (cErr) throw cErr;
+  if (!ownedCourse) throw new Error("no active course — import one first");
+
   const { data, error } = await admin.from("vocab_items").insert({
-    course_id: profile.active_course_id, // owner-only invariant enforced above, not by RLS
+    course_id: ownedCourse.id,
     farsi, transliteration: translit, english,
     part_of_speech: item.part_of_speech ?? null,
     lesson_id: item.lesson_id ?? null,
