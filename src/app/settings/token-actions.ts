@@ -30,7 +30,8 @@ export async function revokeToken(id: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("not authenticated");
 
-  const { error } = await supabase.from("api_tokens").delete().eq("id", id);
+  // RLS already scopes deletes to the owner; the explicit filter is defense-in-depth
+  const { error } = await supabase.from("api_tokens").delete().eq("id", id).eq("user_id", user.id);
   if (error) throw error;
 
   revalidatePath("/settings");
