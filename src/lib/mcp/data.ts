@@ -63,12 +63,23 @@ async function ownedCourseIds(admin: Admin, userId: string): Promise<string[]> {
 
 export async function getStudyState(userId: string): Promise<StudyState> {
   const admin = createAdminClient();
+  const courseIds = await ownedCourseIds(admin, userId);
   const today = new Date().toISOString().slice(0, 10);
   // Monday-anchored week, matching src/app/page.tsx's "lessons this week" tile.
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
   weekStart.setHours(0, 0, 0, 0);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 864e5).toISOString();
+
+  // cardsDue is scoped through vocab_items!inner + course_id so a planted vocab_reviews
+  // row pointing at foreign vocab (e.g. via a bypassed toggleSuspend) can't inflate the
+  // count — mirrors getDueVocab/getStrugglingVocab's scoping below.
+  const cardsDuePromise = courseIds.length === 0
+    ? Promise.resolve({ count: 0, error: null })
+    : admin.from("vocab_reviews")
+        .select("id, vocab_items!inner(course_id)", { count: "exact", head: true })
+        .eq("user_id", userId).eq("suspended", false).lte("due_on", today)
+        .in("vocab_items.course_id", courseIds);
 
   const [
     { data: streakData, error: streakErr },
@@ -80,8 +91,7 @@ export async function getStudyState(userId: string): Promise<StudyState> {
     { data: sessions, error: sessionsErr },
   ] = await Promise.all([
     admin.rpc("current_streak", { p_user: userId }),
-    admin.from("vocab_reviews").select("id", { count: "exact", head: true })
-      .eq("user_id", userId).eq("suspended", false).lte("due_on", today),
+    cardsDuePromise,
     admin.rpc("next_lesson_for", { p_user: userId, p_limit: 1 }),
     admin.from("profiles").select("target_lessons_per_week").eq("id", userId).single(),
     admin.from("lesson_completions").select("completed_at").eq("user_id", userId)
@@ -129,15 +139,23 @@ export async function getLesson(userId: string, lessonNumber: number, includeBod
   return data ?? null;
 }
 
+// !inner turns the embed into an inner join so .in("vocab_items.course_id", ...) actually
+// filters the vocab_reviews rows (a left-embed filter here would only null out the nested
+// object, not drop the row) — this is what closes the cross-tenant leak: a vocab_reviews
+// row planted against foreign vocab_items (e.g. via a bypassed toggleSuspend upsert) is
+// excluded rather than surfaced with its real (foreign) vocab data.
 const VOCAB_REVIEW_JOIN_COLS =
-  "vocab_id, due_on, ease, repetitions, lapses, vocab_items(id, farsi, transliteration, english, part_of_speech, present_stem, past_stem, colloquial)";
+  "vocab_id, due_on, ease, repetitions, lapses, vocab_items!inner(id, farsi, transliteration, english, part_of_speech, present_stem, past_stem, colloquial, course_id)";
 
 export async function getDueVocab(userId: string, limit: number) {
   const admin = createAdminClient();
+  const courseIds = await ownedCourseIds(admin, userId);
+  if (courseIds.length === 0) return [];
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await admin.from("vocab_reviews")
     .select(VOCAB_REVIEW_JOIN_COLS)
     .eq("user_id", userId).eq("suspended", false).lte("due_on", today)
+    .in("vocab_items.course_id", courseIds)
     .order("due_on").limit(limit);
   if (error) throw error;
   return data ?? [];
@@ -145,9 +163,12 @@ export async function getDueVocab(userId: string, limit: number) {
 
 export async function getStrugglingVocab(userId: string, limit: number) {
   const admin = createAdminClient();
+  const courseIds = await ownedCourseIds(admin, userId);
+  if (courseIds.length === 0) return [];
   const { data, error } = await admin.from("vocab_reviews")
     .select(VOCAB_REVIEW_JOIN_COLS)
     .eq("user_id", userId).or("lapses.gte.2,ease.lte.1.6")
+    .in("vocab_items.course_id", courseIds)
     .order("lapses", { ascending: false }).order("ease", { ascending: true }).limit(limit);
   if (error) throw error;
   return data ?? [];

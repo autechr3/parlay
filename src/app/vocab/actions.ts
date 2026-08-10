@@ -28,6 +28,12 @@ export async function toggleSuspend(vocabId: string, suspend: boolean) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("not authenticated");
+  // Upsert has no implicit WHERE clause, so an unowned vocabId would otherwise create a
+  // vocab_reviews row pointing at foreign vocab_items — verify ownership through the
+  // user's own (RLS-scoped) client first; RLS on vocab_items only returns rows whose
+  // course is owned by this user, so a foreign id resolves to no rows here.
+  const { data: item } = await supabase.from("vocab_items").select("id").eq("id", vocabId).maybeSingle();
+  if (!item) throw new Error("vocab item not found");
   const { error } = await supabase.from("vocab_reviews").upsert(
     { user_id: user.id, vocab_id: vocabId, suspended: suspend },
     { onConflict: "user_id,vocab_id" });
