@@ -51,6 +51,9 @@ export type VocabInput = {
   english: string;
   part_of_speech?: string | null;
   lesson_id?: number | null;
+  present_stem?: string | null;
+  past_stem?: string | null;
+  colloquial?: string | null;
 };
 
 // Every course-content query (lessons, vocab_items) must be scoped through this —
@@ -285,6 +288,9 @@ export async function addVocab(userId: string, item: VocabInput): Promise<string
     farsi, transliteration: translit, english,
     part_of_speech: item.part_of_speech ?? null,
     lesson_id: item.lesson_id ?? null,
+    present_stem: item.present_stem ?? null,
+    past_stem: item.past_stem ?? null,
+    colloquial: item.colloquial ?? null,
     tags: ["manual"],
   }).select("id").single();
   if (error) throw error;
