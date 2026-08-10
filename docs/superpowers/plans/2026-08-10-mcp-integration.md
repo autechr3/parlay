@@ -12,7 +12,7 @@
 
 - Tokens: format `fpt_` + 32 random bytes base64url; stored ONLY as sha256 hex; displayed once at creation; `last_used_at` updated on successful auth; revocation = row delete, effective immediately.
 - `/api/mcp` self-authenticates: middleware exemption uses a boundary-safe pattern (`/^\/api\/mcp(\/|$)/`) — do NOT repeat the loose-prefix mistake tracked from Task 8.
-- `_for` SQL variants: bodies identical to the originals except `auth.uid()` → `p_user`; execute revoked from public/anon/authenticated, granted to service_role; pgTAP proves math parity and privilege boundaries.
+- `_for` SQL variants: bodies identical to the originals except `auth.uid()` → `p_user`, **PLUS explicit ownership scoping that RLS provided for the invoker originals but definer variants bypass**: `get_review_queue_for`'s `new_cards`/`due` CTEs must restrict `vocab_items` to `course_id in (select id from courses where owner_id = p_user)`; `grade_card_for` must raise unless `p_vocab_id` belongs to a course owned by `p_user`. Execute revoked from public/anon/authenticated, granted to service_role; pgTAP proves math parity, privilege boundaries, and cross-tenant isolation (two-user fixture).
 - MCP tool handlers NEVER touch progress tables outside the existing engines: `import_content_package` → `importContentPackage`; `complete_lesson` → duplicate-tolerant insert + `bump_study_day_for` only on first completion; `grade_card` → `grade_card_for`.
 - Zod-invalid tool input returns a readable MCP tool error (issue list "path: message"), not a thrown 500.
 - Migration numbering continues at `20260810000011_*` (0010 exists).

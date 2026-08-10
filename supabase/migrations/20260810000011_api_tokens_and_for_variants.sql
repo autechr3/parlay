@@ -36,6 +36,14 @@ begin
   if p_user is null then raise exception 'p_user required'; end if;
   if p_grade < 0 or p_grade > 5 then raise exception 'grade out of range'; end if;
 
+  if not exists (
+    select 1 from vocab_items vi
+    join courses c on c.id = vi.course_id
+    where vi.id = p_vocab_id and c.owner_id = p_user
+  ) then
+    raise exception 'vocab item not found in caller''s courses';
+  end if;
+
   insert into vocab_reviews (user_id, vocab_id) values (v_uid, p_vocab_id)
     on conflict (user_id, vocab_id) do nothing;
   select * into v from vocab_reviews
@@ -109,6 +117,7 @@ as $$
     join vocab_items v on v.id = vr.vocab_id
     where vr.user_id = p_user and not vr.suspended
       and vr.due_on <= local_today(p_user)
+      and v.course_id in (select id from courses where owner_id = p_user)
     order by vr.due_on
     limit greatest(0, (select daily_review_limit from prof) - (select c from reviews_today))
   ),
@@ -120,6 +129,7 @@ as $$
     where not exists (
       select 1 from vocab_reviews vr
       where vr.vocab_id = v.id and vr.user_id = p_user)
+      and v.course_id in (select id from courses where owner_id = p_user)
     order by l.number nulls last, v.farsi
     limit greatest(0, (select daily_new_limit from prof) - (select c from new_today))
   )

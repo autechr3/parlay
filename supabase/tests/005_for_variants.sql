@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(8);
+select plan(11);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000bb', 'mcp@example.com');
 insert into courses (id, owner_id, name) values
@@ -39,6 +39,26 @@ select throws_ok(
 select throws_ok(
   $$select * from get_review_queue_for('00000000-0000-0000-0000-0000000000bb')$$,
   '42501', null, 'authenticated cannot execute get_review_queue_for');
+
+-- second tenant: their content must be invisible to the first user's variants
+reset role;  -- ensure superuser context for these direct calls/inserts
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000cc', 'other@example.com');
+insert into courses (id, owner_id, name) values
+  ('c0000000-0000-0000-0000-0000000000cc', '00000000-0000-0000-0000-0000000000cc', 'Farsi');
+insert into lessons (course_id, number, title, slug) values
+  ('c0000000-0000-0000-0000-0000000000cc', 1, 'L1', 'l1');
+insert into vocab_items (id, course_id, farsi, transliteration, english) values
+  ('20000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-0000000000cc', 'خانه', 'khâne', 'house');
+
+select is( (select count(*)::int from get_review_queue_for('00000000-0000-0000-0000-0000000000bb')),
+           0, 'user B''s vocab never appears in user A''s queue');
+select is( (select count(*)::int from get_review_queue_for('00000000-0000-0000-0000-0000000000cc')),
+           1, 'user B sees exactly their own new card');
+select throws_ok(
+  $$select grade_card_for('00000000-0000-0000-0000-0000000000bb',
+                          '20000000-0000-0000-0000-000000000002', 4::smallint)$$,
+  'vocab item not found in caller''s courses',
+  'A cannot grade B''s vocab');
 
 select * from finish();
 rollback;
