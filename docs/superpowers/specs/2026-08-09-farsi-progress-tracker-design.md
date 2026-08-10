@@ -298,6 +298,45 @@ Every prompt embeds the JSON schema, the ZWNJ/orthography rules from the Persian
 
 The markdown seed script (`scripts/seed-lessons.ts`) is refactored to *build a content package* from `content/lessons/` + `content/vocab.csv` and pass it through the same import function the `/import` screen uses (run with `--user <email>` to pick the owner locally).
 
+## MCP integration (LLM app ↔ tracker)
+
+The tracker exposes a **Streamable-HTTP MCP server at `/api/mcp`** (via the `mcp-handler` adapter in a Next.js route handler) so the user's AI tutor — Claude Desktop, claude.ai connectors, or Claude Code — can read study state and write results directly, replacing the copy-paste loop. This is also the only ingestion path for `practice_sessions`.
+
+**Auth: personal API tokens.** Table `api_tokens` (below). Tokens are minted in `/settings` (format `fpt_` + 32 random bytes base64url, displayed once, stored as SHA-256 hex), listable and revocable there; `last_used_at` updates on use. Every MCP request carries `Authorization: Bearer <token>`; the route hashes and looks it up, then acts as that user. `/api/mcp` is exempted from the auth-redirect middleware (boundary-safe path match) because it authenticates itself; missing/unknown token → 401.
+
+**Execution identity.** Token requests have no Supabase session, so `auth.uid()`-based SQL can't run. Mirroring the email functions' pattern, a migration adds `security definer` variants with explicit `p_user`: `grade_card_for(p_user, p_vocab_id, p_grade, p_direction, p_ms_taken)` and `get_review_queue_for(p_user)` — same bodies as the originals with `auth.uid()` replaced; execute revoked from public/anon/authenticated, granted to service_role only. All other reads/writes go through a scoped data layer (`src/lib/mcp/data.ts`) that uses the admin client with explicit `user_id`/course-ownership filters and reuses existing engines — `import_content_package` calls the same `importContentPackage` as `/import` (validation, merge semantics, second-course block, progress-tables-never-touched all inherited); `complete_lesson` mirrors the app action's duplicate-tolerant semantics.
+
+**Tools (11):**
+
+| Tool | Kind | Behavior |
+|---|---|---|
+| `get_study_state` | read | streak, cards due, next lesson (number/title/slug), lessons done this week vs target, weak skills (latest rating ≤ 3), top errors (30 days) |
+| `get_lesson` | read | by lesson number; metadata always, `body_md` only when `include_body` |
+| `get_due_vocab` | read | due cards (farsi/translit/english/POS/stems), limit param |
+| `get_struggling_vocab` | read | highest-lapse / lowest-ease items, limit param |
+| `search_vocab` | read | Persian-normalized (`fa_normalize`) or English/translit search |
+| `log_practice_session` | write | inserts `practice_sessions` (lesson_number→id optional, mode, duration_minutes, errors[], strengths[], raw_log) |
+| `complete_lesson` | write | same semantics as the completion form: duplicate-tolerant insert, `bump_study_day` only on first completion, optional skill ratings (validated 1–5) |
+| `add_vocab` | write | single item into the active course |
+| `import_content_package` | content | full package JSON through `importContentPackage` |
+| `get_review_queue` | review | due-first queue honoring daily limits (`get_review_queue_for`) |
+| `grade_card` | review | SM-2 grade 0–5 via `grade_card_for` — chat reviews and app reviews share one history |
+
+Tool inputs validated with zod; errors returned as readable MCP tool errors (zod issues verbatim, same paste-back philosophy as `/import`). `/settings` shows connect instructions for Claude Desktop, claude.ai, and Claude Code alongside token management. Rate limiting is deferred to deploy (note: Vercel/edge middleware later).
+
+```sql
+-- ============ API tokens (MCP) ============
+create table api_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  name text not null,
+  token_hash text not null unique,          -- sha256 hex of the full token
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+-- RLS: owner-only (auth.uid() = user_id); grants to authenticated + service_role.
+```
+
 ## SRS algorithm
 
 SM-2, lightly modified, implemented as Postgres function `grade_card(p_vocab_id uuid, p_grade smallint)` so the logic lives in one place:
@@ -350,7 +389,7 @@ Interval capped at 365 days. New cards enter with `due_on = today`. `grade_card`
 - **`/progress`** — skill ratings over time (line chart per skill), ranked error-frequency list from `practice_sessions.errors` (the most useful thing on the page), vocabulary retention rate, total study time.
 - **`/import`** — paste/upload a content-package JSON: validate (zod, errors shown verbatim), preview counts, confirm, idempotent upsert into the owner's course. See Content packages section.
 - **`/prompts`** — copy-paste agent prompt library generated from the active course's state. See Content packages section.
-- **`/settings`** — timezone, email on/off, delivery hour, weekly target, daily card limits, active course selector.
+- **`/settings`** — timezone, email on/off, delivery hour, weekly target, daily card limits, active course selector; **API tokens** section (mint/list/revoke MCP tokens + connect instructions for Claude Desktop / claude.ai / Claude Code).
 - **Data export** — a button that dumps all the user's tables to JSON.
 
 ## Daily reminder email
