@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { updateSettings } from "./actions";
+import { TokenManager } from "@/components/TokenManager";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: p } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
+  const { data: tokens } = await supabase.from("api_tokens")
+    .select("id, name, created_at, last_used_at").eq("user_id", user!.id)
+    .order("created_at", { ascending: false });
   const field = "flex items-center justify-between gap-4";
   const input = "w-48 rounded border p-2";
   return (
@@ -29,6 +33,7 @@ export default async function SettingsPage() {
             defaultValue={p.daily_review_limit} className={input} /></label>
         <button className="rounded bg-black p-3 text-white">Save</button>
       </form>
+      <TokenManager tokens={tokens ?? []} />
     </main>
   );
 }
