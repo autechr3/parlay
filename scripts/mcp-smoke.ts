@@ -101,6 +101,9 @@ function killDevServer(child: ChildProcess) {
 let sessionId: string | undefined;
 let nextId = 1;
 
+// Global reference for signal handlers to ensure dev server is killed
+let globalDevServer: ChildProcess | null = null;
+
 async function sendMcp(
   token: string,
   body: Record<string, unknown>,
@@ -202,6 +205,7 @@ async function main() {
   let preExistingVocabReview: Record<string, unknown> | null = null;
   const studyDaysBefore = new Map<string, number>();
   const reviewLogIdsBefore = new Set<string | number>();
+  let allChecksPassed = false;
 
   try {
     // --- dev server: reuse if already up, else spawn it ourselves ---
@@ -218,6 +222,7 @@ async function main() {
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
+      globalDevServer = devServer;
       devServer.stderr?.on("data", (d) => process.stderr.write(`[dev] ${d}`));
       await waitForServer(`${BASE_URL}/login`);
       console.log("dev server ready");
@@ -250,6 +255,23 @@ async function main() {
       "streak" in state && "cardsDue" in state,
       `get_study_state missing streak/cardsDue keys: ${JSON.stringify(state)}`,
     );
+    const cardsDue = state.cardsDue as number;
+
+    // Cross-check: cardsDue must equal the admin count of due, unsuspended vocab_reviews
+    // (due_on <= today and not suspended)
+    const todayIso = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const { data: dueCards, error: dueErr } = await admin
+      .from("vocab_reviews").select("id", { count: "exact" })
+      .eq("user_id", userId)
+      .eq("suspended", false)
+      .lte("due_on", todayIso);
+    if (dueErr) fail(`failed to cross-check cardsDue: ${dueErr.message}`);
+    const adminDueCount = dueCards?.length ?? 0;
+    assert(
+      cardsDue === adminDueCount,
+      `cardsDue mismatch: tool returned ${cardsDue}, admin count = ${adminDueCount}`,
+    );
+
     console.log(`get_study_state OK (streak=${state.streak}, cardsDue=${state.cardsDue})`);
 
     // --- log_practice_session ---
@@ -274,6 +296,29 @@ async function main() {
     const firstItem = queue[0];
     assert(typeof firstItem.vocab_id === "string", `queue item missing vocab_id: ${JSON.stringify(firstItem)}`);
     gradedVocabId = firstItem.vocab_id;
+
+    // Cross-check: each vocab_id in the queue must exist in vocab_items owned by the user's courses
+    const queueVocabIds = queue.map((item) => item.vocab_id);
+
+    // Get the user's owned courses
+    const { data: userCourses, error: coursesErr } = await admin
+      .from("courses").select("id").eq("owner_id", userId);
+    if (coursesErr) fail(`failed to get user courses: ${coursesErr?.message}`);
+    const courseIds = (userCourses ?? []).map((c) => c.id as string);
+
+    if (courseIds.length > 0 && queueVocabIds.length > 0) {
+      const { data: vocabCheck, error: vocabErr } = await admin
+        .from("vocab_items").select("id", { count: "exact" })
+        .in("id", queueVocabIds)
+        .in("course_id", courseIds);
+      if (vocabErr) fail(`failed to cross-check queue vocab_ids: ${vocabErr.message}`);
+      const vocabCheckCount = vocabCheck?.length ?? 0;
+      assert(
+        vocabCheckCount === queueVocabIds.length,
+        `queue vocab_id mismatch: found ${vocabCheckCount}/${queueVocabIds.length} in user's courses`,
+      );
+    }
+
     console.log(`get_review_queue OK (${queue.length} items, grading vocab_id=${gradedVocabId})`);
 
     // Snapshot what grade_card is about to touch, so cleanup can restore the
@@ -302,24 +347,38 @@ async function main() {
     if (rlErr || !rlRows?.length) fail(`review_log row not found after grade_card: ${rlErr?.message}`);
     console.log(`grade_card OK (review_log row ${rlRows[0].id} verified)`);
 
-    console.log("MCP SMOKE OK (11 tools, state/log/queue/grade verified, cleaned up)");
+    // Mark that all checks passed; cleanup will be exception-safe
+    allChecksPassed = true;
   } catch (e) {
     console.error(`\nMCP SMOKE FAILED: ${(e as Error).message}`);
     process.exitCode = 1;
   } finally {
     // --- cleanup: restore mag@saf.com to zero progress, whatever happened above ---
-    await cleanup(admin, {
-      userId,
-      tokenId,
-      practiceSessionId: createdPracticeSessionId,
-      gradedVocabId,
-      preExistingVocabReview,
-      reviewLogIdsBefore,
-      studyDaysBefore,
-    });
-    if (devServer) {
-      console.log("stopping dev server...");
-      killDevServer(devServer);
+    let cleanupErr: Error | null = null;
+    try {
+      await cleanup(admin, {
+        userId,
+        tokenId,
+        practiceSessionId: createdPracticeSessionId,
+        gradedVocabId,
+        preExistingVocabReview,
+        reviewLogIdsBefore,
+        studyDaysBefore,
+      });
+    } catch (e) {
+      cleanupErr = e as Error;
+      process.exitCode = 1;
+    } finally {
+      // Always kill dev server, even if cleanup fails
+      if (devServer) {
+        console.log("stopping dev server...");
+        killDevServer(devServer);
+      }
+
+      // Print success line only if all checks passed AND cleanup succeeded
+      if (allChecksPassed && !cleanupErr && (process.exitCode === 0 || process.exitCode === undefined)) {
+        console.log("MCP SMOKE OK (11 tools, state/log/queue/grade verified, cleaned up)");
+      }
     }
   }
 }
@@ -338,74 +397,118 @@ async function cleanup(
 ) {
   const errors: string[] = [];
 
+  // Delete practice_sessions
   if (ctx.practiceSessionId) {
-    const { error } = await admin.from("practice_sessions").delete().eq("id", ctx.practiceSessionId);
-    if (error) errors.push(`delete practice_sessions: ${error.message}`);
+    try {
+      const { error } = await admin.from("practice_sessions").delete().eq("id", ctx.practiceSessionId);
+      if (error) errors.push(`delete practice_sessions: ${error.message}`);
+    } catch (e) {
+      errors.push(`delete practice_sessions exception: ${(e as Error).message}`);
+    }
   }
 
+  // Delete/restore review_log
   if (ctx.gradedVocabId) {
-    // review_log: delete only the row(s) grade_card just created (diff against the
-    // pre-grade snapshot), not everything for this vocab_id.
-    const { data: rlNow, error: rlErr } = await admin
-      .from("review_log").select("id").eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
-    if (rlErr) {
-      errors.push(`snapshot review_log for cleanup: ${rlErr.message}`);
-    } else {
-      const newIds = (rlNow ?? []).map((r) => r.id as string | number)
-        .filter((id) => !ctx.reviewLogIdsBefore.has(id));
-      if (newIds.length) {
-        const { error } = await admin.from("review_log").delete().in("id", newIds);
-        if (error) errors.push(`delete review_log: ${error.message}`);
-      }
-    }
-
-    // vocab_reviews: restore the pre-grade snapshot exactly (delete if grade_card
-    // created it fresh, restore prior columns if a row already existed).
-    if (ctx.preExistingVocabReview) {
-      const rest = { ...ctx.preExistingVocabReview };
-      delete rest.id;
-      const { error } = await admin.from("vocab_reviews").update(rest)
-        .eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
-      if (error) errors.push(`restore vocab_reviews: ${error.message}`);
-    } else {
-      const { error } = await admin.from("vocab_reviews").delete()
-        .eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
-      if (error) errors.push(`delete vocab_reviews: ${error.message}`);
-    }
-
-    // study_days: restore the pre-grade snapshot (delete rows grade_card created,
-    // restore cards_reviewed on rows it merely bumped).
-    const { data: sdNow, error: sdErr } = await admin
-      .from("study_days").select("day, cards_reviewed").eq("user_id", ctx.userId);
-    if (sdErr) {
-      errors.push(`snapshot study_days for cleanup: ${sdErr.message}`);
-    } else {
-      for (const row of sdNow ?? []) {
-        const day = row.day as string;
-        const before = ctx.studyDaysBefore.get(day);
-        if (before === undefined) {
-          const { error } = await admin.from("study_days").delete()
-            .eq("user_id", ctx.userId).eq("day", day);
-          if (error) errors.push(`delete study_days ${day}: ${error.message}`);
-        } else if (before !== row.cards_reviewed) {
-          const { error } = await admin.from("study_days").update({ cards_reviewed: before })
-            .eq("user_id", ctx.userId).eq("day", day);
-          if (error) errors.push(`restore study_days ${day}: ${error.message}`);
+    try {
+      const { data: rlNow, error: rlErr } = await admin
+        .from("review_log").select("id").eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
+      if (rlErr) {
+        errors.push(`snapshot review_log for cleanup: ${rlErr.message}`);
+      } else {
+        const newIds = (rlNow ?? []).map((r) => r.id as string | number)
+          .filter((id) => !ctx.reviewLogIdsBefore.has(id));
+        if (newIds.length) {
+          const { error } = await admin.from("review_log").delete().in("id", newIds);
+          if (error) errors.push(`delete review_log: ${error.message}`);
         }
       }
+    } catch (e) {
+      errors.push(`review_log cleanup exception: ${(e as Error).message}`);
     }
   }
 
-  const { error: tokenDelErr } = await admin.from("api_tokens").delete().eq("id", ctx.tokenId);
-  if (tokenDelErr) errors.push(`delete api_tokens: ${tokenDelErr.message}`);
+  // Delete/restore vocab_reviews
+  if (ctx.gradedVocabId) {
+    try {
+      // vocab_reviews: restore the pre-grade snapshot exactly (delete if grade_card
+      // created it fresh, restore prior columns if a row already existed).
+      if (ctx.preExistingVocabReview) {
+        const rest = { ...ctx.preExistingVocabReview };
+        delete rest.id;
+        const { error } = await admin.from("vocab_reviews").update(rest)
+          .eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
+        if (error) errors.push(`restore vocab_reviews: ${error.message}`);
+      } else {
+        const { error } = await admin.from("vocab_reviews").delete()
+          .eq("user_id", ctx.userId).eq("vocab_id", ctx.gradedVocabId);
+        if (error) errors.push(`delete vocab_reviews: ${error.message}`);
+      }
+    } catch (e) {
+      errors.push(`vocab_reviews cleanup exception: ${(e as Error).message}`);
+    }
+  }
+
+  // Restore study_days
+  if (ctx.gradedVocabId) {
+    try {
+      // study_days: restore the pre-grade snapshot (delete rows grade_card created,
+      // restore cards_reviewed on rows it merely bumped).
+      const { data: sdNow, error: sdErr } = await admin
+        .from("study_days").select("day, cards_reviewed").eq("user_id", ctx.userId);
+      if (sdErr) {
+        errors.push(`snapshot study_days for cleanup: ${sdErr.message}`);
+      } else {
+        for (const row of sdNow ?? []) {
+          const day = row.day as string;
+          const before = ctx.studyDaysBefore.get(day);
+          if (before === undefined) {
+            const { error } = await admin.from("study_days").delete()
+              .eq("user_id", ctx.userId).eq("day", day);
+            if (error) errors.push(`delete study_days ${day}: ${error.message}`);
+          } else if (before !== row.cards_reviewed) {
+            const { error } = await admin.from("study_days").update({ cards_reviewed: before })
+              .eq("user_id", ctx.userId).eq("day", day);
+            if (error) errors.push(`restore study_days ${day}: ${error.message}`);
+          }
+        }
+      }
+    } catch (e) {
+      errors.push(`study_days cleanup exception: ${(e as Error).message}`);
+    }
+  }
+
+  // Delete api_tokens
+  try {
+    const { error: tokenDelErr } = await admin.from("api_tokens").delete().eq("id", ctx.tokenId);
+    if (tokenDelErr) errors.push(`delete api_tokens: ${tokenDelErr.message}`);
+  } catch (e) {
+    errors.push(`delete api_tokens exception: ${(e as Error).message}`);
+  }
 
   if (errors.length) {
     console.error(`cleanup had errors (manual check needed):\n  ${errors.join("\n  ")}`);
-    process.exitCode = 1;
+    throw new Error(`cleanup failed with ${errors.length} error(s)`);
   } else {
     console.log("cleanup OK — mag@saf.com restored to zero progress");
   }
 }
+
+// Signal handlers for graceful shutdown
+process.on("SIGINT", () => {
+  console.error("\nSIGINT received");
+  if (globalDevServer) {
+    killDevServer(globalDevServer);
+  }
+  process.exit(130);
+});
+
+process.on("SIGTERM", () => {
+  console.error("SIGTERM received");
+  if (globalDevServer) {
+    killDevServer(globalDevServer);
+  }
+  process.exit(143);
+});
 
 main().catch((e) => {
   console.error(e);
