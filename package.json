@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "seed": "tsx scripts/seed-lessons.ts"
+    "seed": "tsx scripts/seed-lessons.ts",
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
