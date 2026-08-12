@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = [/^\/login/, /^\/auth\//, /^\/api\/unsubscribe/, /^\/api\/mcp(\/|$)/];
+const PUBLIC_PATHS = [
+  /^\/login/,
+  /^\/auth\//,
+  /^\/api\/unsubscribe/,
+  /^\/api\/mcp(\/|$)/,
+  /^\/\.well-known\//,
+  /^\/oauth\/register$/,
+  /^\/oauth\/token$/,
+];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -23,7 +31,12 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (!user && !PUBLIC_PATHS.some((re) => re.test(path))) {
     const url = request.nextUrl.clone();
+    const originalPathAndSearch = path + request.nextUrl.search;
     url.pathname = "/login";
+    url.search = "";
+    if (path !== "/") {
+      url.searchParams.set("next", originalPathAndSearch);
+    }
     return NextResponse.redirect(url);
   }
   return response;

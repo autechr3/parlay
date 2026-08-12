@@ -1,30 +1,35 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { sanitizeNext } from "@/lib/oauth";
 
-export default function LoginPage() {
+function LoginForm() {
   const supabase = createBrowserClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const next = sanitizeNext(useSearchParams().get("next"));
 
   async function magicLink(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithOtp({
-      email, options: { emailRedirectTo: `${site}/auth/callback` },
+      email,
+      options: { emailRedirectTo: `${site}/auth/callback?next=${encodeURIComponent(next)}` },
     });
     setMsg(error ? error.message : "Check your email for the sign-in link.");
   }
   async function google() {
     await supabase.auth.signInWithOAuth({
-      provider: "google", options: { redirectTo: `${site}/auth/callback` },
+      provider: "google",
+      options: { redirectTo: `${site}/auth/callback?next=${encodeURIComponent(next)}` },
     });
   }
   async function passwordLogin(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setMsg(error.message); else window.location.href = "/";
+    if (error) setMsg(error.message); else window.location.href = next;
   }
 
   return (
@@ -45,5 +50,16 @@ export default function LoginPage() {
       )}
       {msg && <p className="text-sm text-gray-600">{msg}</p>}
     </main>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams requires a Suspense boundary in the App Router (it opts
+  // the subtree out of static rendering); the rest of the page has no data
+  // dependency on `next`, so wrapping just the form is enough.
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
