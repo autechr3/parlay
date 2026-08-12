@@ -17,6 +17,8 @@ import {
   gradeCard,
 } from "@/lib/mcp/data";
 
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 // Every tool handler funnels through here: on success the data-layer's return
 // value is the tool result, on throw it becomes an isError text result — same
 // shape the brief specifies for all 11 tools, factored once instead of repeated
@@ -210,7 +212,14 @@ async function handleMcpRequest(req: Request): Promise<Response> {
   if (!auth) {
     return new Response(JSON.stringify({ error: "invalid or missing API token" }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Points OAuth-aware clients (claude.ai's connector UI) at the
+        // protected-resource metadata doc so they can discover the
+        // authorization server and start the OAuth flow instead of just
+        // failing silently.
+        "WWW-Authenticate": `Bearer resource_metadata="${SITE}/.well-known/oauth-protected-resource"`,
+      },
     });
   }
   const handler = createMcpHandler(
