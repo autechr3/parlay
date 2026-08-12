@@ -9,7 +9,8 @@ const NEXT_PATTERN = /^\/[a-zA-Z0-9_\-/?=&%.]*$/;
 
 // Post-login redirect target. Only same-origin relative paths are allowed —
 // anything else (absolute URLs, protocol-relative "//host" URLs, or a
-// missing value) falls back to "/".
+// missing value) falls back to "/". The result must NOT be decodeURIComponent'd
+// before redirecting — the // guard operates on the literal string.
 export function sanitizeNext(next: string | null): string {
   if (next === null) return "/";
   if (next.startsWith("//")) return "/";
@@ -17,14 +18,24 @@ export function sanitizeNext(next: string | null): string {
   return next;
 }
 
+function isAllowedScheme(uri: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(uri);
+  } catch {
+    return false;
+  }
+  if (u.protocol === "https:") return true;
+  if (u.protocol === "http:") return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+  return false;
+}
+
 // OAuth redirect_uri validation: exact string match against the client's
 // registered URIs. https is always allowed; http is allowed only for
 // localhost/127.0.0.1 (dev-loopback), per OAuth 2.0 for native/loopback apps.
 export function validateRedirectUri(uri: string, registered: string[]): boolean {
   if (!registered.includes(uri)) return false;
-  if (uri.startsWith("https://")) return true;
-  if (uri.startsWith("http://localhost") || uri.startsWith("http://127.0.0.1")) return true;
-  return false;
+  return isAllowedScheme(uri);
 }
 
 // RFC 7636 code_verifier charset: unreserved characters, 43-128 of them.

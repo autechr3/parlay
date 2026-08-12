@@ -31,6 +31,18 @@ describe("validateRedirectUri", () => {
   it("accepts http://localhost when registered", () => {
     expect(validateRedirectUri("http://localhost:3000/cb", registered)).toBe(true);
   });
+  it("rejects http://localhost.evil.com (hostname mismatch via URL parsing)", () => {
+    expect(validateRedirectUri("http://localhost.evil.com/cb", ["http://localhost.evil.com/cb"])).toBe(false);
+  });
+  it("rejects http://localhost:x@evil.com (URL parses hostname as evil.com)", () => {
+    expect(validateRedirectUri("http://localhost:x@evil.com/cb", ["http://localhost:x@evil.com/cb"])).toBe(false);
+  });
+  it("accepts http://127.0.0.1:3000/cb when registered", () => {
+    expect(validateRedirectUri("http://127.0.0.1:3000/cb", ["http://127.0.0.1:3000/cb"])).toBe(true);
+  });
+  it("rejects non-URL garbage", () => {
+    expect(validateRedirectUri("not a url", ["not a url"])).toBe(false);
+  });
 });
 
 describe("verifyPkce", () => {
