@@ -14,6 +14,15 @@ describe("sanitizeNext", () => {
   it("falls back to / for null", () => {
     expect(sanitizeNext(null)).toBe("/");
   });
+  it("allows legit query chars in state params", () => {
+    expect(sanitizeNext("/oauth/authorize?state=a~b!c(d)")).toBe("/oauth/authorize?state=a~b!c(d)");
+  });
+  it("rejects a path containing a backslash, falling back to /", () => {
+    expect(sanitizeNext("/a\\evil")).toBe("/");
+  });
+  it("rejects a path containing a control character, falling back to /", () => {
+    expect(sanitizeNext("/a\x00b")).toBe("/");
+  });
 });
 
 describe("validateRedirectUri", () => {

@@ -38,7 +38,10 @@ export async function registerClient(
   if (
     !Array.isArray(redirectUris) ||
     redirectUris.length === 0 ||
-    !redirectUris.every((uri) => typeof uri === "string" && isValidRedirectUriScheme(uri))
+    redirectUris.length > 10 ||
+    !redirectUris.every(
+      (uri) => typeof uri === "string" && uri.length <= 2000 && isValidRedirectUriScheme(uri),
+    )
   ) {
     return { error: "invalid_client_metadata" };
   }

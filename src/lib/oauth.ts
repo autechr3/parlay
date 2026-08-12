@@ -5,16 +5,16 @@ import { createHash, randomBytes } from "node:crypto";
 // convention). Anything that needs the admin client belongs in a
 // "-server.ts" sibling instead.
 
-const NEXT_PATTERN = /^\/[a-zA-Z0-9_\-/?=&%.]*$/;
-
 // Post-login redirect target. Only same-origin relative paths are allowed —
 // anything else (absolute URLs, protocol-relative "//host" URLs, or a
 // missing value) falls back to "/". The result must NOT be decodeURIComponent'd
 // before redirecting — the // guard operates on the literal string.
 export function sanitizeNext(next: string | null): string {
-  if (next === null) return "/";
-  if (next.startsWith("//")) return "/";
-  if (!NEXT_PATTERN.test(next)) return "/";
+  if (!next) return "/";
+  if (!next.startsWith("/") || next.startsWith("//")) return "/";
+  if (next.includes("\\")) return "/";
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(next)) return "/";
   return next;
 }
 
