@@ -14,6 +14,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "access_denied" }, { status: 403 });
   }
 
+  // CSRF defense-in-depth: explicit same-origin check
+  const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  const sameOrigin =
+    (origin !== null && origin === new URL(SITE).origin) ||
+    (origin === null && referer !== null && referer.startsWith(new URL(SITE).origin + "/"));
+  if (!sameOrigin) {
+    return NextResponse.json(
+      { error: "forbidden", error_description: "cross-origin request rejected" },
+      { status: 403 }
+    );
+  }
+
   const form = await request.formData();
   const clientId = form.get("client_id");
   const redirectUri = form.get("redirect_uri");
@@ -23,6 +37,7 @@ export async function POST(request: Request) {
   if (
     typeof clientId !== "string" ||
     typeof redirectUri !== "string" ||
+    !codeChallenge ||
     typeof codeChallenge !== "string"
   ) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
