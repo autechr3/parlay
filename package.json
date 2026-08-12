@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "seed": "tsx scripts/seed-lessons.ts",
-    "mcp:smoke": "tsx scripts/mcp-smoke.ts"
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts",
+    "oauth:smoke": "tsx scripts/oauth-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
