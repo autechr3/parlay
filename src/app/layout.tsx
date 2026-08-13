@@ -31,7 +31,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           where declared — on <body> the var never reaches :root and every
           .font-fa silently falls back to Arial/naskh. */}
       <body className="antialiased"
-        style={{ "--fa-scale": faScale } as React.CSSProperties}>
+        // --script-scale mirrors --fa-scale from the same profiles.fa_scale value;
+        // Task 7 renames the column read to script_scale and drops --fa-scale.
+        style={{ "--fa-scale": faScale, "--script-scale": faScale } as React.CSSProperties}>
         {user && <Nav />}
         {children}
       </body>

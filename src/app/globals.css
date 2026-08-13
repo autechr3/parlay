@@ -28,6 +28,9 @@ body {
 
 @theme {
   --font-fa: var(--font-farsi), serif;
+  /* Alias for the new script-generic name; same underlying font var until
+     Task 7 renames the font const itself. */
+  --font-script: var(--font-farsi), serif;
 }
 
 /* Persian script runs visually smaller than Latin at the same font-size and is
@@ -37,6 +40,15 @@ body {
    with local text-* utilities; .font-fa elements are leaves, so no compounding. */
 .font-fa {
   font-size: calc(1em * var(--fa-scale, 1.25));
+  line-height: 1.5;
+}
+
+/* Script-generic successor to .font-fa (see rename map in shared-context.md).
+   Coexists with .font-fa until Task 7 removes the old one; --script-scale is
+   set alongside --fa-scale on <body> in layout.tsx from the same profile value. */
+.font-script {
+  font-family: var(--font-script);
+  font-size: calc(1em * var(--script-scale, 1.25));
   line-height: 1.5;
 }
 
