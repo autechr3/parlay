@@ -27,7 +27,7 @@ body {
 }
 
 @theme {
-  --font-fa: var(--font-vazirmatn), serif;
+  --font-fa: var(--font-farsi), serif;
 }
 
 /* Persian script runs visually smaller than Latin at the same font-size and is

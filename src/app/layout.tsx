@@ -4,11 +4,12 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { createClient } from "@/lib/supabase/server";
 
-// No brackets in the font filename: Vercel treats [wght] in a static-asset URL
-// as a dynamic-route segment and 404s it, silently degrading Farsi to serif.
-const vazirmatn = localFont({
-  src: "../fonts/VazirmatnVariable.woff2",
-  variable: "--font-vazirmatn",
+// Estedad (OFL, github.com/aminabedi68/Estedad): geometric low-contrast Persian
+// face — reads "print-modern" where naskh-style faces read calligraphic.
+const farsiFont = localFont({
+  src: "../fonts/EstedadVariable.woff2",
+  variable: "--font-farsi",
+  weight: "100 900",
   display: "swap",
 });
 
@@ -25,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
   return (
     <html lang="en">
-      <body className={`${vazirmatn.variable} antialiased`}
+      <body className={`${farsiFont.variable} antialiased`}
         style={{ "--fa-scale": faScale } as React.CSSProperties}>
         {user && <Nav />}
         {children}
