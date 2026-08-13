@@ -4,8 +4,10 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { createClient } from "@/lib/supabase/server";
 
+// No brackets in the font filename: Vercel treats [wght] in a static-asset URL
+// as a dynamic-route segment and 404s it, silently degrading Farsi to serif.
 const vazirmatn = localFont({
-  src: "../fonts/Vazirmatn[wght].woff2",
+  src: "../fonts/VazirmatnVariable.woff2",
   variable: "--font-vazirmatn",
   display: "swap",
 });
