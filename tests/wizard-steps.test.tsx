@@ -244,6 +244,16 @@ describe("StepCurriculum", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText.mock.calls[0][0]).toContain("beginner Farsi curriculum");
   });
+
+  it("passes status.hasToken through to buildCreateCoursePrompt — unconnected learner gets the JSON-only closing", () => {
+    render(<StepCurriculum status={makeStatus({ hasToken: false })} onCurriculumArrived={() => {}} />);
+    expect(screen.getByText(/Output ONLY the JSON object/)).toBeTruthy();
+  });
+
+  it("passes status.hasToken through to buildCreateCoursePrompt — connected learner gets the tool-call closing", () => {
+    render(<StepCurriculum status={makeStatus({ hasToken: true })} onCurriculumArrived={() => {}} />);
+    expect(screen.getByText(/import_content_package tool/)).toBeTruthy();
+  });
 });
 
 describe("Wizard", () => {
@@ -462,5 +472,56 @@ describe("Wizard", () => {
 
     expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
     expect(routerPush).toHaveBeenCalledWith("/curriculums");
+  });
+
+  it("Skip still navigates to /curriculums when completeOnboarding rejects (logs, doesn't strand the learner)", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    completeOnboardingMock.mockRejectedValueOnce(new Error("expired session"));
+    render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
+
+    fireEvent.click(screen.getByText("Skip setup"));
+    await flush();
+
+    expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
+    expect(routerPush).toHaveBeenCalledWith("/curriculums");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("a rejected arrival-stamp retries on the next trigger — resolves on second attempt, called twice total", async () => {
+    // The first attempt to stamp completeOnboarding on curriculum arrival fails. Wizard's own
+    // /welcome/status polling never fires again after arrival (status.curriculumCount > 0 stops
+    // it for good — see the fetch-effect's early return), so the only remaining trigger for a
+    // retry is a fresh mount of StepCurriculum: Back(4->3) then Next(3->4) unmounts and remounts
+    // it, and its mount effect re-checks status.curriculumCount independently of Wizard's ref.
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    completeOnboardingMock.mockRejectedValueOnce(new Error("transient failure"));
+    stubFetch(
+      makeStatus(), // step 3 immediate fetch
+      makeStatus(), // step 4 immediate fetch
+      makeStatus({ curriculumCount: 1, firstCurriculumName: "Farsi A1" }), // first 4s tick
+    );
+    render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
+
+    goToStep3();
+    await flush();
+    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    await flush();
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    await flush();
+
+    expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/✓ 'Farsi A1' imported/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Back")); // step 4 -> 3, unmounts StepCurriculum
+    await flush();
+    fireEvent.click(screen.getByText("Next")); // step 3 -> 4, remounts StepCurriculum, retries the stamp
+    await flush();
+
+    expect(completeOnboardingMock).toHaveBeenCalledTimes(2);
+    consoleErrorSpy.mockRestore();
   });
 });

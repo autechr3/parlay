@@ -20,7 +20,10 @@ export function StepCurriculum({
   onCurriculumArrived: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const prompt = buildCreateCoursePrompt(true);
+  // Connection-aware: an unconnected learner's tutor has no MCP tools to call, so the prompt
+  // must close with the JSON-output fallback instead of instructing it to call
+  // import_content_package.
+  const prompt = buildCreateCoursePrompt(status.hasToken);
 
   useEffect(() => {
     if (status.curriculumCount > 0) {

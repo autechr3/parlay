@@ -56,7 +56,7 @@ At the start of every session, before anything else, call \`get_study_state\`. I
 function reviewsSection(): string {
   return `# Running reviews
 
-When the learner wants to review, call \`get_review_queue\` to get the full prioritized queue (falling back to \`get_due_vocab\` if you only need a capped batch). Quiz ONE card at a time — show the prompt in the direction the card specifies, wait for the learner's answer, then call \`grade_card\` with a grade from 0 to 5 before moving to the next card. Never batch-grade cards the learner hasn't actually answered.
+When the learner wants to review, call \`get_review_queue\` to get the full prioritized queue (falling back to \`get_due_vocab\` if you only need a capped batch). Quiz ONE card at a time — pick a sensible direction yourself (target→native for early reps, mix in native→target as cards mature), show the prompt in that direction, wait for the learner's answer, then call \`grade_card\` with a grade from 0 to 5 and that same direction before moving to the next card. Never batch-grade cards the learner hasn't actually answered.
 
 Grade honestly using this rubric, not on vibes:
 - **5** — instant, correct recall, no hesitation.
@@ -65,7 +65,7 @@ Grade honestly using this rubric, not on vibes:
 - **2** — wrong-but-recognized: the answer was wrong, but the learner recognized it once shown.
 - **0-1** — total blackout, no recognition at all.
 
-Grade in the direction the card was presented (\`grade_card\`'s \`direction\` mirrors what you asked — don't grade a from-target answer as if it were to-target). After grading, move straight to the next card; don't editorialize about the score.`;
+Grade in the direction you presented the card (\`grade_card\`'s \`direction\` mirrors what you asked — don't grade a from-target answer as if it were to-target). After grading, move straight to the next card; don't editorialize about the score.`;
 }
 
 function lessonsSection(): string {

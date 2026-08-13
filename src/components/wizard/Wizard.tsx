@@ -78,14 +78,27 @@ export function Wizard({
     setStep((s) => Math.min(4, s + 1));
   }
 
-  function skip() {
+  async function skip() {
     // completeOnboarding already exists (Task 1) and is idempotent — call it directly rather
-    // than deferring the stamp to a later step, then leave the wizard.
-    void completeOnboarding().then(() => router.push("/curriculums"));
+    // than deferring the stamp to a later step, then leave the wizard. A rejection (expired
+    // session, network) must not strand the learner on the wizard: log it and navigate anyway —
+    // the destination page works regardless, and server-side idempotency means a later action
+    // (or a retry of this same stamp) can re-attempt it safely.
+    try {
+      await completeOnboarding();
+    } catch (err) {
+      console.error("completeOnboarding failed", err);
+    }
+    router.push("/curriculums");
   }
 
-  function finish() {
-    void completeOnboarding().then(() => router.push("/curriculums"));
+  async function finish() {
+    try {
+      await completeOnboarding();
+    } catch (err) {
+      console.error("completeOnboarding failed", err);
+    }
+    router.push("/curriculums");
   }
 
   // Guards the curriculum-arrival completeOnboarding call. This ref lives here (not inside
@@ -98,8 +111,16 @@ export function Wizard({
   const curriculumArrivedRef = useRef(false);
   const handleCurriculumArrived = useCallback(() => {
     if (curriculumArrivedRef.current) return;
+    // Set eagerly so a second invocation arriving while this call is still pending (e.g. a
+    // near-simultaneous re-render) doesn't double-fire completeOnboarding. If the call actually
+    // fails, reset the ref so the next trigger (another status change, or a Back/Next remount of
+    // StepCurriculum, whose mount effect re-checks status.curriculumCount independently of this
+    // ref) gets a real retry instead of being silently blocked for the rest of this Wizard mount.
     curriculumArrivedRef.current = true;
-    void completeOnboarding();
+    completeOnboarding().catch((err) => {
+      console.error("completeOnboarding failed", err);
+      curriculumArrivedRef.current = false;
+    });
   }, []);
 
   function isDone(n: number): boolean {
