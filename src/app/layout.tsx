@@ -25,8 +25,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     if (p?.fa_scale) faScale = p.fa_scale / 100;
   }
   return (
-    <html lang="en">
-      <body className={`${farsiFont.variable} antialiased`}
+    <html lang="en" className={farsiFont.variable}>
+      {/* Font var must sit on <html>: Tailwind's @theme emits
+          --font-fa: var(--font-farsi) on :root, and custom properties resolve
+          where declared — on <body> the var never reaches :root and every
+          .font-fa silently falls back to Arial/naskh. */}
+      <body className="antialiased"
         style={{ "--fa-scale": faScale } as React.CSSProperties}>
         {user && <Nav />}
         {children}
