@@ -4,9 +4,26 @@ import { createClient } from "@/lib/supabase/server";
 export default async function LessonsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: units } = await supabase.from("units").select("*").order("number");
+
+  const { data: profile } = await supabase.from("profiles")
+    .select("active_curriculum_id").eq("id", user!.id).single();
+
+  if (!profile?.active_curriculum_id) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <h1 className="mb-4 text-2xl font-bold">Lessons</h1>
+        <p className="text-gray-500">
+          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+        </p>
+      </main>
+    );
+  }
+
+  const { data: units } = await supabase.from("units").select("*")
+    .eq("curriculum_id", profile.active_curriculum_id).order("number");
   const { data: lessons } = await supabase.from("lessons")
-    .select("id, number, title, slug, unit_id, is_review, is_assessment, estimated_minutes").order("number");
+    .select("id, number, title, slug, unit_id, is_review, is_assessment, estimated_minutes")
+    .eq("curriculum_id", profile.active_curriculum_id).order("number");
   const { data: comps } = await supabase.from("lesson_completions")
     .select("lesson_id, confidence, completed_at").eq("user_id", user!.id);
   const byLesson = new Map((comps ?? []).map((c) => [c.lesson_id, c]));

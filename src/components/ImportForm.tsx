@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { importPackage, type ImportOutcome } from "@/app/import/actions";
+import { importPackage, type ImportOutcome } from "@/app/curriculums/import/actions";
 
 export function ImportForm() {
   const [raw, setRaw] = useState("");
@@ -46,7 +46,7 @@ export function ImportForm() {
       )}
       {out?.ok && out.preview && (
         <div className="rounded bg-gray-50 p-3 text-sm">
-          <p>Course <b>{out.preview.courseName}</b>{out.preview.courseExists ? " (existing)" : " (new)"}:{" "}
+          <p>Curriculum <b>{out.preview.curriculumName}</b>{out.preview.curriculumExists ? " (existing)" : " (new)"}:{" "}
             {out.preview.units} units · {out.preview.lessons.total} lessons
             ({out.preview.lessons.new} new, {out.preview.lessons.updated} updated) ·{" "}
             {out.preview.vocab} vocab · {out.preview.exercises} exercises</p>

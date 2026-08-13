@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 const LINKS = [
+  ["/curriculums", "Library"],
   ["/", "Dashboard"], ["/review", "Review"], ["/flashcards", "Flashcards"],
   ["/lessons", "Lessons"], ["/vocab", "Vocab"], ["/progress", "Progress"],
-  ["/import", "Import"], ["/prompts", "Prompts"],
+  ["/curriculums/import", "Import"], ["/prompts", "Prompts"],
   ["/settings", "Settings"],
 ] as const;
 

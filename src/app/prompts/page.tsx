@@ -94,7 +94,7 @@ export default async function PromptsPage({
       <p className="text-sm text-gray-600">
         Copy-paste prompts for your AI agent, generated from{" "}
         <span className="font-medium">{state.courseName}</span>&apos;s current state. Paste the
-        agent&apos;s JSON reply into <Link href="/import" className="underline">Import</Link>.
+        agent&apos;s JSON reply into <Link href="/curriculums/import" className="underline">Import</Link>.
       </p>
 
       <PromptSection

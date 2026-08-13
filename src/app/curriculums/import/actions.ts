@@ -1,9 +1,10 @@
 "use server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { ContentPackageSchema, importContentPackage, type ImportResult } from "@/lib/content-package";
+import { parseAnyPackage, importContentPackage, type ImportResult } from "@/lib/content-package";
 
 export type Preview = {
-  courseName: string; courseExists: boolean; units: number;
+  curriculumName: string; curriculumExists: boolean; units: number;
   lessons: { total: number; new: number; updated: number };
   vocab: number; exercises: number;
 };
@@ -19,40 +20,48 @@ export async function importPackage(raw: string, confirm: boolean): Promise<Impo
   let json: unknown;
   try { json = JSON.parse(raw); }
   catch (e) { return { ok: false, errors: [`Not valid JSON: ${(e as Error).message}`] }; }
-  const parsed = ContentPackageSchema.safeParse(json);
-  if (!parsed.success)
-    return { ok: false, errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
-  const pkg = parsed.data;
 
-  // Multi-course isn't supported by the UI yet: importing a package whose course.name
-  // doesn't match an existing course would silently create a second course the user
-  // has no way to switch to or see. Block it up front, in both the preview and
+  let pkg;
+  try {
+    // parseAnyPackage upconverts a v1 payload (course{...}) to v2 (curriculum{...}) before
+    // validating, so both legacy and current generator prompts work here.
+    pkg = parseAnyPackage(json);
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return { ok: false, errors: e.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
+    }
+    return { ok: false, errors: [(e as Error).message] };
+  }
+
+  // Multi-curriculum isn't supported by the UI yet: importing a package whose curriculum.name
+  // doesn't match an existing curriculum would silently create a second curriculum the user
+  // has no way to switch to or see from here. Block it up front, in both the preview and
   // confirm paths, rather than letting it succeed and confuse the user later.
-  const { data: ownedCourses, error: ownedErr } = await supabase.from("courses")
+  const { data: ownedCurriculums, error: ownedErr } = await supabase.from("curriculums")
     .select("name").eq("owner_id", user.id);
   if (ownedErr) return { ok: false, errors: [ownedErr.message] };
-  const hasOtherCourse = (ownedCourses ?? []).length > 0
-    && !(ownedCourses ?? []).some((c) => c.name === pkg.course.name);
-  if (hasOtherCourse) {
-    const existingName = (ownedCourses ?? [])[0].name;
+  const hasOtherCurriculum = (ownedCurriculums ?? []).length > 0
+    && !(ownedCurriculums ?? []).some((c) => c.name === pkg.curriculum.name);
+  if (hasOtherCurriculum) {
+    const existingName = (ownedCurriculums ?? [])[0].name;
     return { ok: false, errors: [
-      `You already have a course ('${existingName}'). Multi-course support isn't ready yet — ` +
-      `to add content to your existing course, set course.name to exactly '${existingName}' in the package.`,
+      `You already have a curriculum ('${existingName}'). Multi-curriculum support isn't ready yet — ` +
+      `to add content to your existing curriculum, set curriculum.name to exactly '${existingName}' in the package.`,
     ] };
   }
 
   if (!confirm) {
-    const { data: course } = await supabase.from("courses")
-      .select("id").eq("owner_id", user.id).eq("name", pkg.course.name).maybeSingle();
+    const { data: curriculum } = await supabase.from("curriculums")
+      .select("id").eq("owner_id", user.id).eq("name", pkg.curriculum.name).maybeSingle();
     let existingNumbers = new Set<number>();
-    if (course) {
+    if (curriculum) {
       const { data: ls } = await supabase.from("lessons")
-        .select("number").eq("course_id", course.id);
+        .select("number").eq("curriculum_id", curriculum.id);
       existingNumbers = new Set((ls ?? []).map((l) => l.number));
     }
     const newCount = pkg.lessons.filter((l) => !existingNumbers.has(l.number)).length;
     return { ok: true, preview: {
-      courseName: pkg.course.name, courseExists: !!course,
+      curriculumName: pkg.curriculum.name, curriculumExists: !!curriculum,
       units: new Set([...pkg.units.map((u) => u.number),
                       ...pkg.lessons.flatMap((l) => l.unit ? [l.unit] : [])]).size,
       lessons: { total: pkg.lessons.length, new: newCount, updated: pkg.lessons.length - newCount },

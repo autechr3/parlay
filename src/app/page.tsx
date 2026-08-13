@@ -8,15 +8,29 @@ export default async function Dashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   const uid = user!.id;
 
-  const [{ data: streak }, { count: dueCount }, { data: profile }, { data: days },
+  const { data: profile } = await supabase.from("profiles")
+    .select("active_curriculum_id, target_lessons_per_week, timezone").eq("id", uid).single();
+
+  if (!profile?.active_curriculum_id) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <h1 className="mb-4 text-2xl font-bold">Dashboard</h1>
+        <p className="text-gray-500">
+          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+        </p>
+      </main>
+    );
+  }
+
+  const [{ data: streak }, { count: dueCount }, { data: days },
          { data: lessons }, { data: comps }] = await Promise.all([
     supabase.rpc("current_streak"),
     supabase.from("vocab_reviews").select("id", { count: "exact", head: true })
       .eq("user_id", uid).eq("suspended", false).lte("due_on", new Date().toISOString().slice(0, 10)),
-    supabase.from("profiles").select("target_lessons_per_week, timezone").eq("id", uid).single(),
     supabase.from("study_days").select("day, cards_reviewed, lessons_completed")
       .eq("user_id", uid).gte("day", new Date(Date.now() - 91 * 864e5).toISOString().slice(0, 10)),
-    supabase.from("lessons").select("id, number, title, slug").order("number"),
+    supabase.from("lessons").select("id, number, title, slug")
+      .eq("curriculum_id", profile.active_curriculum_id).order("number"),
     supabase.from("lesson_completions").select("lesson_id, completed_at").eq("user_id", uid),
   ]);
 
