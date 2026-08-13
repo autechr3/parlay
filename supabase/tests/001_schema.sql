@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(16);
+select plan(17);
 
 select has_table('languages');
 select has_table('curriculums');
@@ -17,6 +17,7 @@ select has_table('email_log');
 
 select has_column('vocab_items', 'term');
 select has_column('vocab_items', 'morphology');
+select has_column('profiles', 'onboarded_at');
 
 select results_eq(
   $$select normalize_term('fa', 'كتابِ  خوب')$$,
