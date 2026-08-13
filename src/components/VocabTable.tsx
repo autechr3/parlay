@@ -1,13 +1,14 @@
 "use client";
 import { useState } from "react";
-import { FarsiText } from "./FarsiText";
-import { FaKeyboard } from "./FaKeyboard";
+import { TermText } from "./TermText";
+import { ScriptKeyboard } from "./ScriptKeyboard";
+import { getLanguage } from "@/lib/languages";
 import { addVocabItem, toggleSuspend } from "@/app/vocab/actions";
 
 const POS_OPTIONS = ["noun", "verb", "adj", "adv", "prep", "phrase", "number"];
 
 export type VocabItem = {
-  id: string; farsi: string; transliteration: string; english: string;
+  id: string; term: string; transliteration: string; translation: string;
   part_of_speech: string | null; lesson_id: number | null; tags: string[];
   lessons: { number: number } | { number: number }[] | null;
 };
@@ -18,7 +19,7 @@ export type LessonOption = { id: number; number: number };
 
 type Props = {
   items: VocabItem[]; reviews: VocabReview[]; lessons: LessonOption[]; initialQuery: string;
-  initialLesson?: string; initialPos?: string;
+  initialLesson?: string; initialPos?: string; langCode?: string; rtl?: boolean;
 };
 
 function lessonNumber(item: VocabItem): number | null {
@@ -27,9 +28,11 @@ function lessonNumber(item: VocabItem): number | null {
   return Array.isArray(l) ? (l[0]?.number ?? null) : l.number;
 }
 
-export function VocabTable({ items, reviews, lessons, initialQuery, initialLesson = "", initialPos = "" }: Props) {
+export function VocabTable({ items, reviews, lessons, initialQuery, initialLesson = "", initialPos = "",
+  langCode = "fa", rtl = true }: Props) {
+  const language = getLanguage(langCode);
   const [showAdd, setShowAdd] = useState(false);
-  const [farsiInput, setFarsiInput] = useState("");
+  const [termInput, setTermInput] = useState("");
   const [showAddKeyboard, setShowAddKeyboard] = useState(false);
   const [showSearchKeyboard, setShowSearchKeyboard] = useState(false);
   const [q, setQ] = useState(initialQuery);
@@ -42,10 +45,12 @@ export function VocabTable({ items, reviews, lessons, initialQuery, initialLesso
       <form method="get" action="/vocab" className="flex flex-col gap-3 rounded border p-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <input name="q" value={q} onChange={(e) => setQ(e.target.value)}
-            dir="rtl" lang="fa" placeholder="Search farsi, english, or transliteration"
-            className="min-w-56 flex-1 rounded border p-2 font-fa" autoComplete="off" />
-          <button type="button" onClick={() => setShowSearchKeyboard((v) => !v)}
-            className="rounded border px-3 py-2">{showSearchKeyboard ? "hide keyboard" : "کیبورد"}</button>
+            dir={rtl ? "rtl" : "ltr"} lang={langCode} placeholder="Search term, translation, or transliteration"
+            className="min-w-56 flex-1 rounded border p-2 font-script" autoComplete="off" />
+          {language.keyboardLayout && (
+            <button type="button" onClick={() => setShowSearchKeyboard((v) => !v)}
+              className="rounded border px-3 py-2">{showSearchKeyboard ? "hide keyboard" : "keyboard"}</button>
+          )}
           <select name="lesson" defaultValue={initialLesson} className="rounded border p-2">
             <option value="">All lessons</option>
             {lessons.map((l) => (
@@ -58,8 +63,8 @@ export function VocabTable({ items, reviews, lessons, initialQuery, initialLesso
           </select>
           <button type="submit" className="rounded bg-black px-4 py-2 text-white">Search</button>
         </div>
-        {showSearchKeyboard && (
-          <FaKeyboard onKey={(ch) => setQ((v) => v + ch)}
+        {showSearchKeyboard && language.keyboardLayout && (
+          <ScriptKeyboard layout={language.keyboardLayout} onKey={(ch) => setQ((v) => v + ch)}
             onBackspace={() => setQ((v) => v.slice(0, -1))} />
         )}
       </form>
@@ -82,7 +87,8 @@ export function VocabTable({ items, reviews, lessons, initialQuery, initialLesso
               return (
                 <tr key={item.id} className="border-b">
                   <td className="p-2">
-                    <FarsiText farsi={item.farsi} translit={item.transliteration} english={item.english} />
+                    <TermText term={item.term} translit={item.transliteration} translation={item.translation}
+                      rtl={rtl} langCode={langCode} />
                   </td>
                   <td className="p-2 text-gray-500">{item.part_of_speech ?? "—"}</td>
                   <td className="p-2 text-gray-500">{num != null ? `L${String(num).padStart(2, "0")}` : "—"}</td>
@@ -110,25 +116,27 @@ export function VocabTable({ items, reviews, lessons, initialQuery, initialLesso
 
       <details className="rounded border p-4" open={showAdd} onToggle={(e) => setShowAdd(e.currentTarget.open)}>
         <summary className="cursor-pointer font-semibold">Add word</summary>
-        <form action={async (formData) => { await addVocabItem(formData); setFarsiInput(""); }}
+        <form action={async (formData) => { await addVocabItem(formData); setTermInput(""); }}
           className="mt-4 flex flex-col gap-3 text-sm">
-          <label className="flex flex-col gap-1">Farsi
-            <input name="farsi" value={farsiInput} onChange={(e) => setFarsiInput(e.target.value)}
-              dir="rtl" lang="fa" required className="rounded border p-2 font-fa" autoComplete="off" />
+          <label className="flex flex-col gap-1">Term
+            <input name="term" value={termInput} onChange={(e) => setTermInput(e.target.value)}
+              dir={rtl ? "rtl" : "ltr"} lang={langCode} required className="rounded border p-2 font-script" autoComplete="off" />
           </label>
-          <button type="button" onClick={() => setShowAddKeyboard((v) => !v)}
-            className="self-start rounded border px-3 py-2">
-            {showAddKeyboard ? "hide keyboard" : "کیبورد"}
-          </button>
-          {showAddKeyboard && (
-            <FaKeyboard onKey={(ch) => setFarsiInput((v) => v + ch)}
-              onBackspace={() => setFarsiInput((v) => v.slice(0, -1))} />
+          {language.keyboardLayout && (
+            <button type="button" onClick={() => setShowAddKeyboard((v) => !v)}
+              className="self-start rounded border px-3 py-2">
+              {showAddKeyboard ? "hide keyboard" : "keyboard"}
+            </button>
+          )}
+          {showAddKeyboard && language.keyboardLayout && (
+            <ScriptKeyboard layout={language.keyboardLayout} onKey={(ch) => setTermInput((v) => v + ch)}
+              onBackspace={() => setTermInput((v) => v.slice(0, -1))} />
           )}
           <label className="flex flex-col gap-1">Transliteration
             <input name="transliteration" required className="rounded border p-2" autoComplete="off" />
           </label>
-          <label className="flex flex-col gap-1">English
-            <input name="english" required className="rounded border p-2" autoComplete="off" />
+          <label className="flex flex-col gap-1">Translation
+            <input name="translation" required className="rounded border p-2" autoComplete="off" />
           </label>
           <label className="flex flex-col gap-1">Part of speech
             <select name="part_of_speech" defaultValue="" className="rounded border p-2">

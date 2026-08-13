@@ -1,4 +1,4 @@
-import { levenshtein } from "./farsi";
+import { levenshtein } from "./text";
 
 const norm = (s: string) =>
   s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();

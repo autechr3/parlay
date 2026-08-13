@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { FarsiText } from "./FarsiText";
-import { conjugatePresent, conjugatePast, PRONOUNS } from "../lib/farsi";
+import { TermText } from "./TermText";
+import { getLanguage } from "../lib/languages";
 
 export type DeckCard =
-  | { id: string; farsi: string; translit: string; english: string; kind: "vocab" }
-  | { id: string; farsi: string; translit: string; english: string; kind: "verb";
-      presentStem: string; pastStem: string | null };
+  | { id: string; term: string; translit: string; translation: string; kind: "vocab" }
+  | { id: string; term: string; translit: string; translation: string; kind: "verb";
+      morphology: Record<string, string> | null };
 
 function mulberry32(seed: number) {
   return () => {
@@ -26,7 +26,9 @@ export function shuffle<T>(arr: T[], seed: number): T[] {
   return a;
 }
 
-export function FlashcardDeck({ cards: initial }: { cards: DeckCard[] }) {
+export function FlashcardDeck({ cards: initial, langCode = "fa", rtl = true }:
+  { cards: DeckCard[]; langCode?: string; rtl?: boolean }) {
+  const language = getLanguage(langCode);
   const [cards, setCards] = useState(initial);
   const [i, setI] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -45,31 +47,48 @@ export function FlashcardDeck({ cards: initial }: { cards: DeckCard[] }) {
 
   if (!card) return <p className="p-6 text-gray-500">No cards in this deck.</p>;
 
+  // Capability-gated: only build a conjugation table when the language exposes drills
+  // AND this specific item actually has the morphology drills need (e.g. present_stem).
+  const drillCards = card.kind === "verb" && language.drills
+    ? language.drills.buildCards({
+        term: card.term, transliteration: card.translit, translation: card.translation,
+        morphology: card.morphology,
+      })
+    : null;
+
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="text-xs text-gray-400">{i + 1} / {cards.length}</p>
       <div onClick={() => setFlipped((f) => !f)}
         className="flex min-h-56 w-full max-w-md cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border p-6 text-3xl shadow-sm">
-        {!flipped && <FarsiText farsi={card.farsi} translit={card.translit} english={card.english} />}
-        {flipped && card.kind === "vocab" && (
-          <>
-            <FarsiText farsi={card.farsi} />
-            <p className="text-xl italic text-gray-600">{card.translit}</p>
-            <p className="text-xl text-gray-700">{card.english}</p>
-          </>
+        {!flipped && (
+          <TermText term={card.term} translit={card.translit} translation={card.translation}
+            rtl={rtl} langCode={langCode} />
         )}
-        {flipped && card.kind === "verb" && (
+        {flipped && drillCards && (
           <table className="text-lg" onClick={(e) => e.stopPropagation()}>
             <tbody>
-              {PRONOUNS.map((pr, r) => (
+              {language.drills!.pronouns.map((pr, r) => (
                 <tr key={pr}>
-                  <td className="pr-4 text-gray-500"><span dir="rtl" lang="fa" className="font-fa">{pr}</span></td>
-                  <td className="pr-4"><span dir="rtl" lang="fa" className="font-fa">{conjugatePresent(card.presentStem)[r]}</span></td>
-                  <td>{card.pastStem && <span dir="rtl" lang="fa" className="font-fa">{conjugatePast(card.pastStem)[r]}</span>}</td>
+                  <td className="pr-4 text-gray-500">
+                    <span dir={rtl ? "rtl" : "ltr"} lang={langCode} className="font-script">{pr}</span>
+                  </td>
+                  {drillCards.map((c) => (
+                    <td key={c.label} className="pr-4">
+                      <span dir={rtl ? "rtl" : "ltr"} lang={langCode} className="font-script">{c.forms[r]}</span>
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {flipped && !drillCards && (
+          <>
+            <span dir={rtl ? "rtl" : "ltr"} lang={langCode} className="font-script">{card.term}</span>
+            <p className="text-xl italic text-gray-600">{card.translit}</p>
+            <p className="text-xl text-gray-700">{card.translation}</p>
+          </>
         )}
       </div>
       <div className="flex gap-3 text-sm">

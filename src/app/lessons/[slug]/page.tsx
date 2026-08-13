@@ -11,11 +11,27 @@ export default async function LessonPage({ params, searchParams }:
   const { override } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: lesson } = await supabase.from("lessons").select("*").eq("slug", slug).single();
+
+  const { data: profile } = await supabase.from("profiles")
+    .select("active_curriculum_id").eq("id", user!.id).single();
+  if (!profile?.active_curriculum_id) {
+    return (
+      <main className="mx-auto max-w-xl p-6">
+        <h1 className="text-xl font-bold">No active curriculum</h1>
+        <p className="mt-4 text-gray-600">
+          <Link className="underline" href="/import">Import a curriculum to get started</Link>.
+        </p>
+      </main>
+    );
+  }
+
+  const { data: lesson } = await supabase.from("lessons").select("*")
+    .eq("curriculum_id", profile.active_curriculum_id).eq("slug", slug).single();
   if (!lesson) notFound();
 
   const { data: prev } = lesson.number > 1
-    ? await supabase.from("lessons").select("id").eq("number", lesson.number - 1).single()
+    ? await supabase.from("lessons").select("id")
+        .eq("curriculum_id", profile.active_curriculum_id).eq("number", lesson.number - 1).single()
     : { data: null };
   const { data: comps } = await supabase.from("lesson_completions")
     .select("lesson_id").eq("user_id", user!.id).in("lesson_id", [lesson.id, prev?.id ?? -1]);
@@ -38,7 +54,7 @@ export default async function LessonPage({ params, searchParams }:
         <h1 className="text-xl font-bold">L{String(lesson.number).padStart(2, "0")}: {lesson.title}</h1>
         <Link href={`/lessons/${slug}/practice`} className="rounded border px-3 py-1 text-sm">Practice →</Link>
       </div>
-      {/* prose styling; Persian inside the markdown is handled by the fa-aware prose css below */}
+      {/* prose styling; the target language inside the markdown is handled by the script-aware prose css below */}
       <article className="prose max-w-none [&_table]:block [&_table]:overflow-x-auto">
         <Markdown remarkPlugins={[remarkGfm]}>{lesson.body_md ?? "_No lesson body imported._"}</Markdown>
       </article>

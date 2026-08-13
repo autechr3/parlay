@@ -2,14 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 
 const USER_TABLES = ["profiles", "lesson_completions", "practice_sessions", "skill_ratings",
   "vocab_reviews", "review_log", "study_days", "exercise_attempts", "email_log"];
-const COURSE_TABLES = ["courses", "units", "lessons", "vocab_items", "exercises"]; // owner RLS scopes these too
+const CURRICULUM_TABLES = ["curriculums", "units", "lessons", "vocab_items", "exercises"]; // owner RLS scopes these too
 
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response("unauthorized", { status: 401 });
   const out: Record<string, unknown> = { exported_at: new Date().toISOString() };
-  for (const t of [...USER_TABLES, ...COURSE_TABLES]) {
+  for (const t of [...USER_TABLES, ...CURRICULUM_TABLES]) {
     const { data, error } = await supabase.from(t).select("*"); // RLS scopes user tables automatically
     if (error) return new Response(`export failed on ${t}: ${error.message}`, { status: 500 });
     out[t] = data;

@@ -3,13 +3,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { pickDirection, type Direction } from "@/lib/directions";
 import { GradeQueue, makeIdbStore, makeGradeRpc } from "@/lib/grade-queue";
-import { checkTypedAnswer, conjugatePresent, conjugatePast } from "@/lib/farsi";
-import { FarsiText } from "./FarsiText";
-import { FaKeyboard } from "./FaKeyboard";
+import { checkTypedAnswer } from "@/lib/text";
+import { getLanguage } from "@/lib/languages";
+import { TermText } from "./TermText";
+import { ScriptKeyboard } from "./ScriptKeyboard";
 
 export type QueueCard = {
-  vocab_id: string; farsi: string; transliteration: string; english: string;
-  part_of_speech: string | null; present_stem: string | null; past_stem: string | null;
+  vocab_id: string; term: string; term_vocalized: string | null; transliteration: string;
+  translation: string; part_of_speech: string | null; morphology: Record<string, string> | null;
   colloquial: string | null; repetitions: number; is_new: boolean;
 };
 
@@ -18,8 +19,10 @@ const GRADES = [
   { key: "3", label: "Good", grade: 4 }, { key: "4", label: "Easy", grade: 5 },
 ] as const;
 
-export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
+export function ReviewSession({ initialQueue, langCode = "fa", rtl = true, showDiacritics = false }:
+  { initialQueue: QueueCard[]; langCode?: string; rtl?: boolean; showDiacritics?: boolean }) {
   const supabase = useMemo(() => createBrowserClient(), []);
+  const language = useMemo(() => getLanguage(langCode), [langCode]);
   const queue = useMemo(
     () => new GradeQueue(makeIdbStore(), makeGradeRpc(supabase)), [supabase]);
   const [i, setI] = useState(0);
@@ -33,10 +36,21 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
   const grading = useRef(false);
 
   const card = initialQueue[i];
+  // Capability-gated: the stem direction (and its conjugation table on reveal) only
+  // applies when the language actually has a drill provider AND this card carries
+  // the morphology drills need.
+  const hasStem = !!(card && language.drills && card.morphology?.present_stem);
   const direction: Direction | null =
-    card ? pickDirection(card.part_of_speech, card.repetitions, !!card.present_stem) : null;
+    card ? pickDirection(card.part_of_speech, card.repetitions, hasStem) : null;
   const typedCard = direction === "en_to_fa" || direction === "stem";
-  const expected = !card ? "" : direction === "stem" ? (card.present_stem ?? "") : card.farsi;
+  const displayTerm = card ? (showDiacritics && card.term_vocalized ? card.term_vocalized : card.term) : "";
+  const expected = !card ? "" : direction === "stem" ? (card.morphology?.present_stem ?? "") : displayTerm;
+  const drillCards = card && direction === "stem" && hasStem
+    ? language.drills!.buildCards({
+        term: card.term, transliteration: card.transliteration, translation: card.translation,
+        morphology: card.morphology,
+      })
+    : null;
 
   useEffect(() => {
     setRevealed(false); setTyped(""); setVerdict(null);
@@ -54,7 +68,7 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
 
   function submitTyped() {
     if (!card) return;
-    setVerdict(checkTypedAnswer(typed, expected).verdict);
+    setVerdict(checkTypedAnswer(typed, expected, language.normalize).verdict);
     setRevealed(true);
   }
 
@@ -118,21 +132,27 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
       </p>
 
       <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded border p-6 text-3xl">
-        {direction === "fa_to_en" && <FarsiText farsi={card.farsi} translit={card.transliteration} english={card.english} locked={!revealed} />}
-        {direction === "en_to_fa" && <span className="text-2xl">{card.english}</span>}
+        {direction === "fa_to_en" && (
+          <TermText term={displayTerm} translit={card.transliteration} translation={card.translation}
+            rtl={rtl} langCode={langCode} locked={!revealed} />
+        )}
+        {direction === "en_to_fa" && <span className="text-2xl">{card.translation}</span>}
         {direction === "stem" && (
-          <span className="text-2xl">present stem of <FarsiText farsi={card.farsi} translit={card.transliteration} english={card.english} locked={!revealed} /></span>
+          <span className="text-2xl">present stem of <TermText term={displayTerm} translit={card.transliteration}
+            translation={card.translation} rtl={rtl} langCode={langCode} locked={!revealed} /></span>
         )}
       </div>
 
       <div className="min-h-40">
         {!revealed && typedCard && (
           <div className="flex flex-col gap-2">
-            <input ref={inputRef} dir="rtl" lang="fa" value={typed}
+            <input ref={inputRef} dir={rtl ? "rtl" : "ltr"} lang={langCode} value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              className="rounded border p-3 text-2xl font-fa" autoComplete="off" />
-            <FaKeyboard onKey={(ch) => setTyped((t) => t + ch)}
-              onBackspace={() => setTyped((t) => t.slice(0, -1))} />
+              className="rounded border p-3 text-2xl font-script" autoComplete="off" />
+            {language.keyboardLayout && (
+              <ScriptKeyboard layout={language.keyboardLayout} onKey={(ch) => setTyped((t) => t + ch)}
+                onBackspace={() => setTyped((t) => t.slice(0, -1))} />
+            )}
             <button onClick={submitTyped} className="rounded bg-black p-3 text-white">Check</button>
           </div>
         )}
@@ -144,19 +164,19 @@ export function ReviewSession({ initialQueue }: { initialQueue: QueueCard[] }) {
         {revealed && (
           <div className="flex flex-col gap-3">
             <div className="text-center text-xl">
-              {direction === "fa_to_en" && <p>{card.english}{card.colloquial && <> · spoken: <FarsiText farsi={card.colloquial} /></>}</p>}
-              {direction === "en_to_fa" && <FarsiText farsi={card.farsi} translit={card.transliteration} />}
-              {direction === "stem" && card.present_stem && (
+              {direction === "fa_to_en" && (
+                <p>{card.translation}{card.colloquial && <> · spoken: <TermText term={card.colloquial} rtl={rtl} langCode={langCode} /></>}</p>
+              )}
+              {direction === "en_to_fa" && <TermText term={displayTerm} translit={card.transliteration} rtl={rtl} langCode={langCode} />}
+              {direction === "stem" && drillCards && (
                 <div>
-                  <FarsiText farsi={card.present_stem} />
-                  <p dir="rtl" lang="fa" className="font-fa mt-2 text-base text-gray-600">
-                    {conjugatePresent(card.present_stem).join(" · ")}
-                  </p>
-                  {card.past_stem && (
-                    <p dir="rtl" lang="fa" className="font-fa text-base text-gray-500">
-                      {conjugatePast(card.past_stem).join(" · ")}
+                  <TermText term={expected} rtl={rtl} langCode={langCode} />
+                  {drillCards.map((c, idx) => (
+                    <p key={c.label} dir={rtl ? "rtl" : "ltr"} lang={langCode}
+                      className={`font-script mt-2 text-base ${idx === 0 ? "text-gray-600" : "text-gray-500"}`}>
+                      {c.forms.join(" · ")}
                     </p>
-                  )}
+                  ))}
                 </div>
               )}
               {verdict === "close" && <p className="mt-1 text-sm text-amber-600">close — check the spelling</p>}
