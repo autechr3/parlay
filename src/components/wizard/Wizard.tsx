@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 // Relative import (not "@/...") so this module resolves under vitest, which has no alias
 // config — see tests/wizard-steps.test.tsx's header comment / tests/curriculum-actions.test.ts
@@ -88,6 +88,20 @@ export function Wizard({
     void completeOnboarding().then(() => router.push("/curriculums"));
   }
 
+  // Guards the curriculum-arrival completeOnboarding call. This ref lives here (not inside
+  // StepCurriculum) specifically because Wizard stays mounted for the entire wizard session while
+  // StepCurriculum unmounts every time the learner steps off step 4 — a ref inside StepCurriculum
+  // would reset on every Back(3)→Next(4) remount and could re-fire. Guaranteed: fires at most once
+  // per Wizard mount. completeOnboarding's own server-side idempotency
+  // (`.is("onboarded_at", null)`) covers the remaining case of multiple Wizard mounts (e.g. a page
+  // reload after the curriculum already arrived).
+  const curriculumArrivedRef = useRef(false);
+  const handleCurriculumArrived = useCallback(() => {
+    if (curriculumArrivedRef.current) return;
+    curriculumArrivedRef.current = true;
+    void completeOnboarding();
+  }, []);
+
   function isDone(n: number): boolean {
     if (n === 3) return status.hasToken;
     if (n === 4) return status.curriculumCount > 0;
@@ -136,7 +150,9 @@ export function Wizard({
       {step === 3 && (
         <StepConnect aiTool={aiTool} onAiToolChange={setAiTool} siteUrl={siteUrl} status={status} />
       )}
-      {step === 4 && <StepCurriculum status={status} />}
+      {step === 4 && (
+        <StepCurriculum status={status} onCurriculumArrived={handleCurriculumArrived} />
+      )}
 
       <div className="mt-6 flex justify-between">
         <button

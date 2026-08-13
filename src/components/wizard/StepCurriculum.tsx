@@ -1,26 +1,32 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 // Relative imports — see Wizard.tsx's header comment for why "@/..." can't be used here.
 import { buildCreateCoursePrompt } from "../../lib/agent-prompts";
-import { completeOnboarding } from "../../app/welcome/actions";
 import type { WelcomeStatus } from "../../app/welcome/status/build";
 
-export function StepCurriculum({ status }: { status: WelcomeStatus }) {
+export function StepCurriculum({
+  status,
+  onCurriculumArrived,
+}: {
+  status: WelcomeStatus;
+  // Called (possibly many times) whenever curriculumCount > 0. The "only once" guard lives in
+  // Wizard, not here — Wizard stays mounted for the whole wizard session, whereas this component
+  // unmounts every time the learner navigates off step 4 (Back to step 3, then Next re-mounts a
+  // fresh instance with a fresh ref), so a local ref here would re-fire on every remount. Wizard's
+  // ref-guarded callback fires completeOnboarding at most once per wizard mount; the server-side
+  // idempotency in completeOnboarding itself (`.is("onboarded_at", null)`) already covers the
+  // remaining case of multiple wizard mounts across page loads.
+  onCurriculumArrived: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const prompt = buildCreateCoursePrompt(true);
 
-  // Fire completeOnboarding the moment a curriculum shows up, but only once — polling in Wizard
-  // keeps calling us with fresh status props (and Wizard itself stops polling once
-  // curriculumCount > 0, but that guarantee lives one level up), so a ref rather than state
-  // guards against double-firing on every subsequent render.
-  const firedRef = useRef(false);
   useEffect(() => {
-    if (status.curriculumCount > 0 && !firedRef.current) {
-      firedRef.current = true;
-      void completeOnboarding();
+    if (status.curriculumCount > 0) {
+      onCurriculumArrived();
     }
-  }, [status.curriculumCount]);
+  }, [status.curriculumCount, onCurriculumArrived]);
 
   async function copy() {
     await navigator.clipboard.writeText(prompt);
