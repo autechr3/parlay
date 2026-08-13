@@ -8,9 +8,14 @@ const LINKS = [
   ["/settings", "Settings"],
 ] as const;
 
-export function Nav() {
+export function Nav({ showSetupGuide = false }: { showSetupGuide?: boolean }) {
   return (
     <nav className="flex flex-wrap items-center gap-4 border-b p-4 text-sm">
+      {showSetupGuide && (
+        <Link href="/welcome" className="font-semibold hover:underline">
+          Setup guide
+        </Link>
+      )}
       {LINKS.map(([href, label]) => (
         <Link key={href} href={href} className="hover:underline">{label}</Link>
       ))}

@@ -19,10 +19,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   let scriptScale = 1.25;  // logged-out fallback, keep in sync with globals.css
+  let showSetupGuide = false;
   if (user) {
     const { data: p } = await supabase.from("profiles")
-      .select("script_scale").eq("id", user.id).maybeSingle();
+      .select("script_scale, onboarded_at").eq("id", user.id).maybeSingle();
     if (p?.script_scale) scriptScale = p.script_scale / 100;
+    showSetupGuide = !p?.onboarded_at;
   }
   return (
     <html lang="en" className={estedad.variable}>
@@ -32,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           .font-script silently falls back to Arial/naskh. */}
       <body className="antialiased"
         style={{ "--script-scale": scriptScale } as React.CSSProperties}>
-        {user && <Nav />}
+        {user && <Nav showSetupGuide={showSetupGuide} />}
         {children}
       </body>
     </html>

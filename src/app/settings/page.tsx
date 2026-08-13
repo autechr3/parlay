@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { updateSettings } from "./actions";
 import { TokenManager } from "@/components/TokenManager";
@@ -34,7 +35,10 @@ export default async function SettingsPage() {
   const input = "w-48 rounded border p-2";
   return (
     <main className="mx-auto max-w-lg p-6">
-      <h1 className="mb-6 text-2xl font-bold">Settings</h1>
+      <h1 className="mb-2 text-2xl font-bold">Settings</h1>
+      <Link href="/welcome" className="mb-6 inline-block text-sm text-gray-500 underline">
+        Setup guide →
+      </Link>
       <form action={updateSettings} className="flex flex-col gap-4">
         <label className={field}>Timezone (IANA)
           <input name="timezone" defaultValue={p.timezone} className={input} /></label>

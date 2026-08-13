@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Heatmap } from "@/components/Heatmap";
 import { CopyPromptButton } from "@/components/CopyPromptButton";
@@ -8,8 +9,20 @@ export default async function Dashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   const uid = user!.id;
 
-  const { data: profile } = await supabase.from("profiles")
-    .select("active_curriculum_id, target_lessons_per_week, timezone").eq("id", uid).single();
+  // Both cheap — run before the heavier per-curriculum Promise.all below so an unonboarded
+  // learner with nothing imported yet gets sent to /welcome without paying for streak/due/heatmap
+  // queries first.
+  const [{ data: profile }, { count: curriculumCount }] = await Promise.all([
+    supabase.from("profiles")
+      .select("active_curriculum_id, target_lessons_per_week, timezone, onboarded_at").eq("id", uid).single(),
+    supabase.from("curriculums").select("id", { count: "exact", head: true }).eq("owner_id", uid),
+  ]);
+
+  // Only unonboarded AND empty — an onboarded learner who deleted every curriculum stays on the
+  // dashboard rather than being bounced back into the wizard.
+  if (!profile?.onboarded_at && (curriculumCount ?? 0) === 0) {
+    redirect("/welcome");
+  }
 
   if (!profile?.active_curriculum_id) {
     return (

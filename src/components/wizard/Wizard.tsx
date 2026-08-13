@@ -1,10 +1,15 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { completeOnboarding } from "@/app/welcome/actions";
-import type { WelcomeStatus } from "@/app/welcome/status/build";
+// Relative import (not "@/...") so this module resolves under vitest, which has no alias
+// config — see tests/wizard-steps.test.tsx's header comment / tests/curriculum-actions.test.ts
+// for the same convention.
+import { completeOnboarding } from "../../app/welcome/actions";
+import type { WelcomeStatus } from "../../app/welcome/status/build";
 import { StepLanguage, type WizardLanguage } from "./StepLanguage";
 import { StepSkill, type AiTool } from "./StepSkill";
+import { StepConnect } from "./StepConnect";
+import { StepCurriculum } from "./StepCurriculum";
 
 const STEPS = [
   { n: 1, label: "Choose language" },
@@ -26,8 +31,39 @@ export function Wizard({
   const [step, setStep] = useState(1);
   const [languageCode, setLanguageCode] = useState("fa");
   const [aiTool, setAiTool] = useState<AiTool>("claude");
+  const [status, setStatus] = useState<WelcomeStatus>(initialStatus);
 
   const selectedLanguage = languages.find((l) => l.code === languageCode) ?? languages[0];
+
+  // Poll /welcome/status while the learner is on steps 3-4 — the only steps whose progress
+  // happens outside this app, inside the learner's AI tool. Fetch immediately on entering either
+  // step so the live strip doesn't wait out the first tick, then every 4s. Once a curriculum has
+  // arrived there is nothing left to detect, so the effect returns early instead of arming a new
+  // interval — the tick that flips curriculumCount to >0 cancels its own interval (via the
+  // cleanup below) and never re-arms one, stopping polling entirely.
+  useEffect(() => {
+    if (step !== 3 && step !== 4) return;
+    if (status.curriculumCount > 0) return;
+
+    let cancelled = false;
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/welcome/status");
+        if (res.ok && !cancelled) {
+          const data = (await res.json()) as WelcomeStatus;
+          setStatus(data);
+        }
+      } catch {
+        // Transient network error — the next 4s tick retries silently.
+      }
+    }
+    void fetchStatus();
+    const id = setInterval(fetchStatus, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [step, status.curriculumCount]);
 
   function selectLanguage(code: string) {
     setLanguageCode(code);
@@ -48,11 +84,13 @@ export function Wizard({
     void completeOnboarding().then(() => router.push("/curriculums"));
   }
 
-  // Steps 1-2 track live wizard progress; steps 3-4 aren't built yet (Task 5), so their
-  // done-check reflects the real account state fetched into initialStatus instead.
+  function finish() {
+    void completeOnboarding().then(() => router.push("/curriculums"));
+  }
+
   function isDone(n: number): boolean {
-    if (n === 3) return initialStatus.hasToken;
-    if (n === 4) return initialStatus.curriculumCount > 0;
+    if (n === 3) return status.hasToken;
+    if (n === 4) return status.curriculumCount > 0;
     return step > n;
   }
 
@@ -96,15 +134,9 @@ export function Wizard({
         />
       )}
       {step === 3 && (
-        <div className="rounded border p-6 text-sm text-gray-600">
-          Continue to connection setup — coming next.
-        </div>
+        <StepConnect aiTool={aiTool} onAiToolChange={setAiTool} siteUrl={siteUrl} status={status} />
       )}
-      {step === 4 && (
-        <div className="rounded border p-6 text-sm text-gray-600">
-          Continue to your first curriculum — coming next.
-        </div>
-      )}
+      {step === 4 && <StepCurriculum status={status} />}
 
       <div className="mt-6 flex justify-between">
         <button
@@ -115,14 +147,23 @@ export function Wizard({
         >
           Back
         </button>
-        <button
-          type="button"
-          disabled={step === 4}
-          onClick={next}
-          className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
-        >
-          Next
-        </button>
+        {step < 4 ? (
+          <button
+            type="button"
+            onClick={next}
+            className="rounded bg-black px-4 py-2 text-sm text-white"
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={finish}
+            className="rounded bg-black px-4 py-2 text-sm text-white"
+          >
+            Finish
+          </button>
+        )}
       </div>
     </main>
   );
