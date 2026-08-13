@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { deriveVocabScript } from "@/lib/content-package";
 
 export async function addVocabItem(formData: FormData) {
   const supabase = await createClient();
@@ -13,9 +14,13 @@ export async function addVocabItem(formData: FormData) {
   const { data: profile } = await supabase.from("profiles")
     .select("active_curriculum_id").eq("id", user.id).single();
   if (!profile?.active_curriculum_id) throw new Error("no active curriculum — import one first");
+  // A vocalized term typed by hand would otherwise land in the `term` identity column;
+  // deriveVocabScript strips diacritics into term_vocalized so a later plain-form import
+  // upserts onto this row instead of minting a duplicate and orphaning SRS history.
+  const script = deriveVocabScript(term);
   const { error } = await supabase.from("vocab_items").insert({
     curriculum_id: profile.active_curriculum_id,   // owner-only RLS authorizes this
-    term, transliteration: translit, translation,
+    ...script, transliteration: translit, translation,
     part_of_speech: String(formData.get("part_of_speech") || "") || null,
     lesson_id: Number(formData.get("lesson_id")) || null,
     tags: ["manual"],

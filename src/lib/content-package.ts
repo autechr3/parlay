@@ -116,6 +116,36 @@ export function buildLessonPayload(
   return payload;
 }
 
+// Curriculum language is immutable after creation — swapping the language on an existing
+// curriculum would desync every language-specific behavior (normalization, diacritic
+// stripping, keyboard layout, ...) from content already imported under the old language.
+// Throws when a package targeting an existing curriculum (matched by owner_id, name)
+// declares a different language than the one already stored.
+export function assertLanguageUnchanged(
+  existing: { language_code: string } | null | undefined,
+  curriculumName: string,
+  newLanguageCode: string,
+): void {
+  if (existing && existing.language_code !== newLanguageCode) {
+    throw new Error(
+      `curriculum "${curriculumName}" is ${existing.language_code}; the package declares ${newLanguageCode} — language cannot change on re-import`,
+    );
+  }
+}
+
+// Presence-aware, matching the lesson payload convention (see buildLessonPayload):
+// description is only included in the upsert when the package actually supplied a value
+// (explicit null clears it; absent leaves any existing description alone).
+export function buildCurriculumPayload(
+  ownerId: string, curriculum: ContentPackage["curriculum"],
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    owner_id: ownerId, name: curriculum.name, language_code: curriculum.language,
+  };
+  if (curriculum.description !== undefined) payload.description = curriculum.description ?? null;
+  return payload;
+}
+
 export async function importContentPackage(
   supabase: SupabaseClient, ownerId: string, pkg: ContentPackage,
 ): Promise<ImportResult> {
@@ -127,11 +157,15 @@ export async function importContentPackage(
     throw new Error(`unsupported language "${pkg.curriculum.language}" — supported: ${supportedCodes.join(", ")}`);
   }
 
-  // curriculum
+  // curriculum — fetch first so a re-import can be checked for a language change and so the
+  // upsert payload can be built presence-aware (not clobbering an existing description).
+  const { data: existingCurriculum, error: existErr } = await supabase.from("curriculums")
+    .select("id, language_code").eq("owner_id", ownerId).eq("name", pkg.curriculum.name).maybeSingle();
+  if (existErr) throw existErr;
+  assertLanguageUnchanged(existingCurriculum, pkg.curriculum.name, pkg.curriculum.language);
+
   const { data: curriculum, error: curErr } = await supabase.from("curriculums")
-    .upsert({ owner_id: ownerId, name: pkg.curriculum.name, description: pkg.curriculum.description ?? null,
-      language_code: pkg.curriculum.language },
-      { onConflict: "owner_id,name" })
+    .upsert(buildCurriculumPayload(ownerId, pkg.curriculum), { onConflict: "owner_id,name" })
     .select("id").single();
   if (curErr) throw curErr;
   const curriculumId = curriculum.id as string;

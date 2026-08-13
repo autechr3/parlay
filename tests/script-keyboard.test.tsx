@@ -45,4 +45,19 @@ describe("ScriptKeyboard", () => {
     );
     for (const ch of "ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی") expect(getByText(ch)).toBeTruthy();
   });
+
+  it("defaults to rtl dir and a Persian aria-label, overridable via rtl/label props", () => {
+    const { getByLabelText, rerender } = render(
+      <ScriptKeyboard layout={SMALL_LAYOUT} onKey={() => {}} onBackspace={() => {}} />
+    );
+    const defaultRoot = getByLabelText("Persian keyboard");
+    expect(defaultRoot.getAttribute("dir")).toBe("rtl");
+
+    rerender(
+      <ScriptKeyboard layout={SMALL_LAYOUT} onKey={() => {}} onBackspace={() => {}}
+        rtl={false} label="Custom keyboard" />
+    );
+    const overriddenRoot = getByLabelText("Custom keyboard");
+    expect(overriddenRoot.getAttribute("dir")).toBe("ltr");
+  });
 });

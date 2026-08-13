@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ContentPackageSchema, slugify, buildLessonPayload, deriveVocabScript } from "../src/lib/content-package";
+import { ContentPackageSchema, slugify, buildLessonPayload, deriveVocabScript,
+  assertLanguageUnchanged, buildCurriculumPayload } from "../src/lib/content-package";
 
 const minimal = {
   format: "farsi-tracker/content-package", version: 2,
@@ -141,5 +142,33 @@ describe("buildLessonPayload", () => {
     }).lessons[0];
     const payload = buildLessonPayload(lesson, true, "curriculum-1", new Map());
     expect(payload.slug).toBe("saying-no-asking-things-review1");
+  });
+});
+
+describe("assertLanguageUnchanged — curriculum language is immutable on re-import", () => {
+  it("does nothing when there is no existing curriculum (first import)", () =>
+    expect(() => assertLanguageUnchanged(null, "Farsi A1", "fa")).not.toThrow());
+  it("does nothing when there is no existing curriculum (undefined)", () =>
+    expect(() => assertLanguageUnchanged(undefined, "Farsi A1", "fa")).not.toThrow());
+  it("does nothing when the existing language matches the package language", () =>
+    expect(() => assertLanguageUnchanged({ language_code: "fa" }, "Farsi A1", "fa")).not.toThrow());
+  it("throws when the package declares a different language than the stored one", () =>
+    expect(() => assertLanguageUnchanged({ language_code: "fa" }, "Farsi A1", "es"))
+      .toThrow('curriculum "Farsi A1" is fa; the package declares es — language cannot change on re-import'));
+});
+
+describe("buildCurriculumPayload — presence-aware description", () => {
+  it("omits description entirely when the package doesn't specify one", () => {
+    const payload = buildCurriculumPayload("owner-1", { name: "Farsi A1", language: "fa" });
+    expect(payload).toEqual({ owner_id: "owner-1", name: "Farsi A1", language_code: "fa" });
+    expect(payload).not.toHaveProperty("description");
+  });
+  it("includes description when the package sets it to a string", () => {
+    const payload = buildCurriculumPayload("owner-1", { name: "Farsi A1", language: "fa", description: "intro course" });
+    expect(payload).toMatchObject({ description: "intro course" });
+  });
+  it("includes an explicit null description (clears an existing one)", () => {
+    const payload = buildCurriculumPayload("owner-1", { name: "Farsi A1", language: "fa", description: null });
+    expect(payload).toMatchObject({ description: null });
   });
 });

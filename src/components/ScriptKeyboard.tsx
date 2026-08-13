@@ -1,11 +1,11 @@
 "use client";
 
-export function ScriptKeyboard({ layout, onKey, onBackspace }:
-  { layout: string[][]; onKey: (ch: string) => void; onBackspace: () => void }) {
+export function ScriptKeyboard({ layout, onKey, onBackspace, rtl = true, label = "Persian keyboard" }:
+  { layout: string[][]; onKey: (ch: string) => void; onBackspace: () => void; rtl?: boolean; label?: string }) {
   const btn = "min-w-10 min-h-10 rounded border bg-white px-2 text-lg font-script active:bg-gray-200";
   const stop = (e: React.MouseEvent) => e.preventDefault(); // keep input focus
   return (
-    <div dir="rtl" className="flex flex-col items-center gap-1 select-none" aria-label="Persian keyboard">
+    <div dir={rtl ? "rtl" : "ltr"} className="flex flex-col items-center gap-1 select-none" aria-label={label}>
       {layout.map((row, ri) => (
         <div key={ri} className="flex gap-1">
           {row.map((ch) => (
