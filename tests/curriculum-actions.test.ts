@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { setActiveCurriculumFor, deleteCurriculumFor } from "../src/app/curriculums/lib";
+import { setActiveCurriculumFor, deleteCurriculumFor, exportTableFilter, type ExportScope } from "../src/app/curriculums/lib";
 
 // Minimal chainable mock in the same spirit as the querybuilder used throughout the app:
 // .from(table) returns a queued canned response for that table, and every chain method
@@ -129,5 +129,51 @@ describe("deleteCurriculumFor", () => {
 
     await deleteCurriculumFor(supabase, "user-1", "c1");
     expect(updateCalls).toEqual([{ active_curriculum_id: null }]);
+  });
+});
+
+describe("exportTableFilter", () => {
+  const scope: ExportScope = {
+    curriculumId: "curric-1",
+    lessonIds: [1, 2, 3],
+    vocabIds: ["v1", "v2"],
+    exerciseIds: ["e1", "e2"],
+  };
+
+  it("returns null (no extra filter) for every table when scope is null — full unscoped export", () => {
+    for (const t of ["profiles", "curriculums", "units", "lessons", "vocab_items", "exercises",
+      "lesson_completions", "exercise_attempts", "vocab_reviews", "review_log",
+      "practice_sessions", "skill_ratings", "study_days", "email_log"]) {
+      expect(exportTableFilter(t, null)).toBeNull();
+    }
+  });
+
+  it("filters curriculums by id", () => {
+    expect(exportTableFilter("curriculums", scope)).toEqual({ op: "eq", column: "id", value: "curric-1" });
+  });
+
+  it("filters units/lessons/vocab_items/exercises by curriculum_id", () => {
+    for (const t of ["units", "lessons", "vocab_items", "exercises"]) {
+      expect(exportTableFilter(t, scope)).toEqual({ op: "eq", column: "curriculum_id", value: "curric-1" });
+    }
+  });
+
+  it("filters lesson_completions by lesson_id in the curriculum's lesson ids", () => {
+    expect(exportTableFilter("lesson_completions", scope)).toEqual({ op: "in", column: "lesson_id", values: [1, 2, 3] });
+  });
+
+  it("filters exercise_attempts by exercise_id (no lesson_id column on that table)", () => {
+    expect(exportTableFilter("exercise_attempts", scope)).toEqual({ op: "in", column: "exercise_id", values: ["e1", "e2"] });
+  });
+
+  it("filters vocab_reviews and review_log by vocab_id in the curriculum's vocab ids", () => {
+    expect(exportTableFilter("vocab_reviews", scope)).toEqual({ op: "in", column: "vocab_id", values: ["v1", "v2"] });
+    expect(exportTableFilter("review_log", scope)).toEqual({ op: "in", column: "vocab_id", values: ["v1", "v2"] });
+  });
+
+  it("leaves study_days, email_log, practice_sessions, skill_ratings, profiles unfiltered even when scoped — they stay user-scoped only", () => {
+    for (const t of ["study_days", "email_log", "practice_sessions", "skill_ratings", "profiles"]) {
+      expect(exportTableFilter(t, scope)).toBeNull();
+    }
   });
 });

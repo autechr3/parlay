@@ -10,7 +10,7 @@ export default async function CurriculumsPage() {
   const [{ data: profile }, { data: curriculums }] = await Promise.all([
     supabase.from("profiles").select("active_curriculum_id").eq("id", uid).single(),
     supabase.from("curriculums")
-      .select("id, name, language_code, languages(native_name)")
+      .select("id, name, language_code, languages(native_name, rtl)")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -49,11 +49,13 @@ export default async function CurriculumsPage() {
 
   const cards: CurriculumCardData[] = curriculums.map((c) => {
     const ownLessonIds = lessonIdsByCurriculum.get(c.id) ?? [];
-    const languageRow = c.languages as unknown as { native_name: string } | null;
+    const languageRow = c.languages as unknown as { native_name: string; rtl: boolean } | null;
     return {
       id: c.id,
       name: c.name,
       nativeName: languageRow?.native_name ?? c.language_code,
+      langCode: c.language_code,
+      rtl: languageRow?.rtl ?? true,
       lessonCount: ownLessonIds.length,
       completedCount: ownLessonIds.filter((id) => completedLessonIds.has(id)).length,
       vocabCount: vocabCountByCurriculum.get(c.id) ?? 0,

@@ -44,3 +44,47 @@ export async function deleteCurriculumFor(
     if (updErr) throw updErr;
   }
 }
+
+// ===== /api/export curriculum-scoping =====
+//
+// Which extra filter (if any) each exported table needs when the request is scoped to a single
+// curriculum via ?curriculum=<id>. Pulled out as a pure, table-name -> filter mapping so the
+// decision is unit-testable without a real (or mocked-chain) SupabaseClient — the route handler
+// just applies whatever this returns.
+export type ExportScope = {
+  curriculumId: string;
+  lessonIds: number[];
+  vocabIds: string[];
+  exerciseIds: string[];
+};
+
+export type ExportFilter =
+  | { op: "eq"; column: string; value: string }
+  | { op: "in"; column: string; values: (number | string)[] };
+
+// Returns null when a table has no curriculum-scoped column at all (profiles, practice_sessions,
+// skill_ratings, study_days, email_log) — those stay user-scoped exactly as the unscoped export
+// already behaves, since day-aggregates and free-form logs aren't reliably per-curriculum.
+export function exportTableFilter(table: string, scope: ExportScope | null): ExportFilter | null {
+  if (!scope) return null;
+  switch (table) {
+    case "curriculums":
+      return { op: "eq", column: "id", value: scope.curriculumId };
+    case "units":
+    case "lessons":
+    case "vocab_items":
+    case "exercises":
+      return { op: "eq", column: "curriculum_id", value: scope.curriculumId };
+    case "lesson_completions":
+      return { op: "in", column: "lesson_id", values: scope.lessonIds };
+    // exercise_attempts has no lesson_id column (only exercise_id) — exercises already carry
+    // curriculum_id directly, so scope through the curriculum's exercise ids instead.
+    case "exercise_attempts":
+      return { op: "in", column: "exercise_id", values: scope.exerciseIds };
+    case "vocab_reviews":
+    case "review_log":
+      return { op: "in", column: "vocab_id", values: scope.vocabIds };
+    default:
+      return null;
+  }
+}

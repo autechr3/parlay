@@ -6,6 +6,8 @@ export type CurriculumCardData = {
   id: string;
   name: string;
   nativeName: string;
+  langCode: string;
+  rtl: boolean;
   lessonCount: number;
   completedCount: number;
   vocabCount: number;
@@ -38,7 +40,8 @@ export function CurriculumCard({ curriculum: c }: { curriculum: CurriculumCardDa
           <span className="shrink-0 rounded bg-green-50 px-2 py-0.5 text-xs text-green-800">Active</span>
         )}
       </div>
-      <span className="w-fit rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{c.nativeName}</span>
+      <span dir={c.rtl ? "rtl" : "ltr"} lang={c.langCode}
+        className="w-fit rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 font-script">{c.nativeName}</span>
       <p className="text-sm text-gray-500">{c.completedCount}/{c.lessonCount} lessons · {progress}% complete</p>
       <div className="h-1.5 w-full rounded bg-gray-100">
         <div className="h-1.5 rounded bg-black" style={{ width: `${progress}%` }} />
@@ -48,7 +51,7 @@ export function CurriculumCard({ curriculum: c }: { curriculum: CurriculumCardDa
           <button disabled={pending} onClick={activate}
             className="rounded border px-3 py-1 disabled:opacity-40">Set active</button>
         )}
-        <a href="/api/export" className="rounded border px-3 py-1">Export</a>
+        <a href={`/api/export?curriculum=${c.id}`} className="rounded border px-3 py-1">Export</a>
         <button disabled={pending} onClick={remove}
           className="rounded border border-red-200 px-3 py-1 text-red-800 disabled:opacity-40">Delete</button>
       </div>
