@@ -30,8 +30,9 @@ function tutorDescription(languageName: string): string {
 }
 
 function frontmatter(languageName: string): string {
+  const slug = languageName.toLowerCase().trim().replace(/\s+/g, "-");
   return `---
-name: ${languageName.toLowerCase()}-tutor
+name: ${slug}-tutor
 description: ${tutorDescription(languageName)}
 ---`;
 }
@@ -89,15 +90,23 @@ After \`import_content_package\` returns, confirm to the learner what actually c
 
 function contentRulesSection(languageCode: string): string {
   const languageRules = buildLanguageRules(languageCode);
+  // morphology is language-dependent per SCHEMA_DOC — state the general rule for every
+  // language, and only add the concrete {present_stem, past_stem} shape when it's known to
+  // apply (Persian verbs today); a future language's morphology fields would need their own
+  // concrete line here rather than inheriting Persian's.
+  const morphologyLine =
+    languageCode === "fa"
+      ? "- Vocab items carry a \`morphology\` object when the language supports conjugation drills. For Persian verbs, include \`morphology.present_stem\` and \`morphology.past_stem\` so the app can generate them."
+      : "- Vocab items carry a \`morphology\` object when the language supports conjugation drills — its shape is language-dependent, so include whatever stems or forms that language's drills need.";
   return `# Content rules
 
 When you build a content-package v2 object for \`import_content_package\`, follow these rules. You don't need to memorize the full schema — if you get it wrong, the tool's validation error tells you exactly what to fix, so treat that as your safety net rather than something to avoid triggering.
 
 - \`format\` must be exactly \`"farsi-tracker/content-package"\` and \`version\` must be exactly \`2\`.
 - Every vocab item's \`term\` must stay PLAIN — no diacritics. It's the identity key used to match existing vocab across re-imports; adding diacritics to it orphans the learner's SRS review history instead of updating the word in place. Diacritics belong only in \`term_vocalized\`.
-- Verbs should include \`morphology.present_stem\` and \`morphology.past_stem\` so the app can generate conjugation drills.
+${morphologyLine}
 - Exercises use one of four types: \`to_target\`, \`from_target\`, \`cloze\`, \`scramble\`.
-- Updates are presence-aware: omit any field or key you don't want to change. In particular, a lesson's \`exercises\` array — when present — REPLACES all existing exercises for that lesson; when the key is absent entirely, existing exercises are left untouched. Use this to send a vocab-only or metadata-only update without wiping out exercises you already wrote.${languageRules ? `\n${languageRules}` : ""}`;
+- Updates are presence-aware: omit any field or key you don't want to change. In particular, a lesson's \`exercises\` array — when present — REPLACES all existing exercises for that lesson; when the key is absent entirely, existing exercises are left untouched. Use this to send a vocab-only or metadata-only update without wiping out exercises you already wrote.${languageRules ? `\n${languageRules.trimEnd()}` : ""}`;
 }
 
 function toolsUnavailableSection(siteUrl: string): string {

@@ -57,6 +57,16 @@ description: Persian language tutor connected to the learner's Farsi Progress Tr
     expect(skill.startsWith("---")).toBe(false);
     expect(skill.startsWith("You are a Persian language tutor")).toBe(true);
   });
+
+  it("slugifies a multi-word language name in the frontmatter `name` field", () => {
+    const skill = buildTutorSkill({
+      languageCode: "pt-br",
+      languageName: "Brazilian Portuguese",
+      siteUrl: "http://localhost:3000",
+      flavor: "claude-skill",
+    });
+    expect(skill).toContain("name: brazilian-portuguese-tutor");
+  });
 });
 
 describe("tutor-skill body sections", () => {
@@ -129,6 +139,26 @@ describe("tutor-skill language rules", () => {
     });
     expect(skill).not.toContain("Language rules (Persian)");
     expect(skill).not.toMatch(/ZWNJ|U\+200C/);
+  });
+});
+
+describe("tutor-skill morphology guidance is language-gated", () => {
+  it("states the concrete present_stem/past_stem shape for fa", () => {
+    const skill = buildTutorSkill(faParams);
+    expect(skill).toContain("present_stem");
+    expect(skill).toContain("past_stem");
+  });
+
+  it("does NOT claim present_stem/past_stem for a non-fa language, only the generic rule", () => {
+    const skill = buildTutorSkill({
+      languageCode: "es",
+      languageName: "Spanish",
+      siteUrl: "http://localhost:3000",
+      flavor: "claude-skill",
+    });
+    expect(skill).not.toContain("present_stem");
+    expect(skill).not.toContain("past_stem");
+    expect(skill).toContain("morphology");
   });
 });
 
