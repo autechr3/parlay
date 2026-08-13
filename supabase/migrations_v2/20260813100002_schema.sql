@@ -210,6 +210,15 @@ create table exercises (
   unique (lesson_id, position)
 );
 
+create table exercise_attempts (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  exercise_id uuid not null references exercises(id) on delete cascade,
+  correct boolean not null,
+  answer_given text,
+  attempted_at timestamptz not null default now()
+);
+
 -- ============ term normalization trigger ============
 create or replace function vocab_items_normalize() returns trigger
 language plpgsql as $$
