@@ -1,13 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { faNormalize } from "@/lib/farsi";
+import { getLanguage } from "@/lib/languages";
 import { importContentPackage, deriveVocabScript, type ContentPackage } from "@/lib/content-package";
-import { pickWeakSkills, rankErrors } from "./helpers";
+import { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
 
 // Re-exported so any caller that only needs the data layer's surface can import
 // from a single module; tests import the pure functions directly from ./helpers
 // (this file starts with "server-only" and can't be loaded from vitest).
-export { pickWeakSkills, rankErrors } from "./helpers";
+export { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -22,6 +22,7 @@ export type StudyState = {
   weeklyTarget: number;
   weakSkills: { skill: string; rating: number }[];
   topErrors: { error: string; count: number }[];
+  curriculum: { name: string; language: string } | null;
 };
 
 export type PracticeSessionInput = {
@@ -46,28 +47,40 @@ export type CompleteLessonInput = {
 };
 
 export type VocabInput = {
-  farsi: string;
-  farsi_vocalized?: string | null;
+  term: string;
+  term_vocalized?: string | null;
   transliteration: string;
-  english: string;
+  translation: string;
   part_of_speech?: string | null;
   lesson_id?: number | null;
-  present_stem?: string | null;
-  past_stem?: string | null;
+  morphology?: Record<string, string> | null;
   colloquial?: string | null;
 };
 
-// Every course-content query (lessons, vocab_items) must be scoped through this —
+// Every curriculum-content query (lessons, vocab_items) must be scoped through this —
 // the admin client bypasses RLS entirely, so tenant isolation here is on us, not Postgres.
-async function ownedCourseIds(admin: Admin, userId: string): Promise<string[]> {
-  const { data, error } = await admin.from("courses").select("id").eq("owner_id", userId);
+async function ownedCurriculumIds(admin: Admin, userId: string): Promise<string[]> {
+  const { data, error } = await admin.from("curriculums").select("id").eq("owner_id", userId);
   if (error) throw error;
   return (data ?? []).map((c) => c.id as string);
 }
 
+// Resolves the caller's active curriculum (name + language code), for embedding into
+// get_study_state and for picking the right normalizer in searchVocab. Returns null when
+// the profile has no active_curriculum_id (or it doesn't resolve to a row).
+async function activeCurriculum(
+  admin: Admin, userId: string,
+): Promise<{ name: string; language: string } | null> {
+  const { data, error } = await admin.from("profiles")
+    .select("curriculums(name, language_code)").eq("id", userId).single();
+  if (error) throw error;
+  const row = data?.curriculums as unknown as { name: string; language_code: string } | null;
+  return row ? { name: row.name, language: row.language_code } : null;
+}
+
 export async function getStudyState(userId: string): Promise<StudyState> {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
   const today = new Date().toISOString().slice(0, 10);
   // Monday-anchored week, matching src/app/page.tsx's "lessons this week" tile.
   const weekStart = new Date();
@@ -75,15 +88,15 @@ export async function getStudyState(userId: string): Promise<StudyState> {
   weekStart.setHours(0, 0, 0, 0);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 864e5).toISOString();
 
-  // cardsDue is scoped through vocab_items!inner + course_id so a planted vocab_reviews
+  // cardsDue is scoped through vocab_items!inner + curriculum_id so a planted vocab_reviews
   // row pointing at foreign vocab (e.g. via a bypassed toggleSuspend) can't inflate the
   // count — mirrors getDueVocab/getStrugglingVocab's scoping below.
-  const cardsDuePromise = courseIds.length === 0
+  const cardsDuePromise = curriculumIds.length === 0
     ? Promise.resolve({ count: 0, error: null })
     : admin.from("vocab_reviews")
-        .select("id, vocab_items!inner(course_id)", { count: "exact", head: true })
+        .select("id, vocab_items!inner(curriculum_id)", { count: "exact", head: true })
         .eq("user_id", userId).eq("suspended", false).lte("due_on", today)
-        .in("vocab_items.course_id", courseIds);
+        .in("vocab_items.curriculum_id", curriculumIds);
 
   const [
     { data: streakData, error: streakErr },
@@ -93,6 +106,7 @@ export async function getStudyState(userId: string): Promise<StudyState> {
     { data: comps, error: compsErr },
     { data: ratings, error: ratingsErr },
     { data: sessions, error: sessionsErr },
+    curriculum,
   ] = await Promise.all([
     admin.rpc("current_streak", { p_user: userId }),
     cardsDuePromise,
@@ -103,6 +117,7 @@ export async function getStudyState(userId: string): Promise<StudyState> {
     admin.from("skill_ratings").select("skill, rating, rated_at").eq("user_id", userId),
     admin.from("practice_sessions").select("errors").eq("user_id", userId)
       .gte("occurred_at", thirtyDaysAgo),
+    activeCurriculum(admin, userId),
   ]);
 
   if (streakErr) throw streakErr;
@@ -125,41 +140,42 @@ export async function getStudyState(userId: string): Promise<StudyState> {
     weeklyTarget: profile?.target_lessons_per_week ?? 5,
     weakSkills: pickWeakSkills(ratings ?? []),
     topErrors: rankErrors(sessions ?? []),
+    curriculum,
   };
 }
 
 const LESSON_COLS_NO_BODY =
-  "id, course_id, number, unit_id, title, slug, filename, grammar_points, new_vocab_count, estimated_minutes, is_review, is_assessment";
+  "id, curriculum_id, number, unit_id, title, slug, filename, grammar_points, new_vocab_count, estimated_minutes, is_review, is_assessment";
 const LESSON_COLS_WITH_BODY = `${LESSON_COLS_NO_BODY}, body_md`;
 
 export async function getLesson(userId: string, lessonNumber: number, includeBody: boolean) {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
-  if (courseIds.length === 0) return null;
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
+  if (curriculumIds.length === 0) return null;
   const { data, error } = await admin.from("lessons")
     .select(includeBody ? LESSON_COLS_WITH_BODY : LESSON_COLS_NO_BODY)
-    .in("course_id", courseIds).eq("number", lessonNumber).maybeSingle();
+    .in("curriculum_id", curriculumIds).eq("number", lessonNumber).maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
 
-// !inner turns the embed into an inner join so .in("vocab_items.course_id", ...) actually
+// !inner turns the embed into an inner join so .in("vocab_items.curriculum_id", ...) actually
 // filters the vocab_reviews rows (a left-embed filter here would only null out the nested
 // object, not drop the row) — this is what closes the cross-tenant leak: a vocab_reviews
 // row planted against foreign vocab_items (e.g. via a bypassed toggleSuspend upsert) is
 // excluded rather than surfaced with its real (foreign) vocab data.
 const VOCAB_REVIEW_JOIN_COLS =
-  "vocab_id, due_on, ease, repetitions, lapses, vocab_items!inner(id, farsi, transliteration, english, part_of_speech, present_stem, past_stem, colloquial, course_id)";
+  "vocab_id, due_on, ease, repetitions, lapses, vocab_items!inner(id, term, term_vocalized, transliteration, translation, part_of_speech, morphology, colloquial, curriculum_id)";
 
 export async function getDueVocab(userId: string, limit: number) {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
-  if (courseIds.length === 0) return [];
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
+  if (curriculumIds.length === 0) return [];
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await admin.from("vocab_reviews")
     .select(VOCAB_REVIEW_JOIN_COLS)
     .eq("user_id", userId).eq("suspended", false).lte("due_on", today)
-    .in("vocab_items.course_id", courseIds)
+    .in("vocab_items.curriculum_id", curriculumIds)
     .order("due_on").limit(limit);
   if (error) throw error;
   return data ?? [];
@@ -167,12 +183,12 @@ export async function getDueVocab(userId: string, limit: number) {
 
 export async function getStrugglingVocab(userId: string, limit: number) {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
-  if (courseIds.length === 0) return [];
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
+  if (curriculumIds.length === 0) return [];
   const { data, error } = await admin.from("vocab_reviews")
     .select(VOCAB_REVIEW_JOIN_COLS)
     .eq("user_id", userId).or("lapses.gte.2,ease.lte.1.6")
-    .in("vocab_items.course_id", courseIds)
+    .in("vocab_items.curriculum_id", curriculumIds)
     .order("lapses", { ascending: false }).order("ease", { ascending: true }).limit(limit);
   if (error) throw error;
   return data ?? [];
@@ -180,20 +196,24 @@ export async function getStrugglingVocab(userId: string, limit: number) {
 
 export async function searchVocab(userId: string, query: string, limit: number) {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
-  if (courseIds.length === 0) return [];
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
+  if (curriculumIds.length === 0) return [];
   let q = admin.from("vocab_items")
-    .select("id, farsi, transliteration, english, part_of_speech, lesson_id, tags")
-    .in("course_id", courseIds).order("farsi").limit(limit);
-  const isFa = /[؀-ۿ]/.test(query);
-  if (isFa) {
-    q = q.ilike("farsi_normalized", `%${faNormalize(query)}%`);
+    .select("id, term, transliteration, translation, part_of_speech, lesson_id, tags")
+    .in("curriculum_id", curriculumIds).order("term").limit(limit);
+  const isTargetScript = /[؀-ۿ]/.test(query);
+  if (isTargetScript) {
+    // Diacritics/search normalization is language-specific — resolve it from the caller's
+    // active curriculum rather than hardcoding Farsi's normalizer, mirroring src/app/vocab/page.tsx.
+    const curriculum = await activeCurriculum(admin, userId);
+    const language = getLanguage(curriculum?.language ?? "");
+    q = q.ilike("term_normalized", `%${language.normalize(query)}%`);
   } else {
     // Same sanitizer as src/app/vocab/page.tsx: strip characters that would break
     // out of the .or() filter-string grammar (commas separate clauses, parens/quotes
     // are structural) rather than reject or escape them.
     const safe = query.replace(/[,()"]/g, " ");
-    q = q.or(`english.ilike.%${safe}%,transliteration.ilike.%${safe}%`);
+    q = q.or(`translation.ilike.%${safe}%,transliteration.ilike.%${safe}%`);
   }
   const { data, error } = await q;
   if (error) throw error;
@@ -204,9 +224,9 @@ export async function logPracticeSession(userId: string, input: PracticeSessionI
   const admin = createAdminClient();
   let lessonId: number | null = null;
   if (input.lesson_number != null) {
-    const courseIds = await ownedCourseIds(admin, userId);
+    const curriculumIds = await ownedCurriculumIds(admin, userId);
     const { data: lesson, error: lErr } = await admin.from("lessons").select("id")
-      .in("course_id", courseIds).eq("number", input.lesson_number).maybeSingle();
+      .in("curriculum_id", curriculumIds).eq("number", input.lesson_number).maybeSingle();
     if (lErr) throw lErr;
     if (!lesson) throw new Error(`lesson ${input.lesson_number} not found`);
     lessonId = lesson.id as number;
@@ -230,9 +250,9 @@ export async function logPracticeSession(userId: string, input: PracticeSessionI
 // only insert errors are), same as the original formData loop.
 export async function completeLesson(userId: string, input: CompleteLessonInput) {
   const admin = createAdminClient();
-  const courseIds = await ownedCourseIds(admin, userId);
+  const curriculumIds = await ownedCurriculumIds(admin, userId);
   const { data: lesson, error: lErr } = await admin.from("lessons").select("id")
-    .in("course_id", courseIds).eq("number", input.lesson_number).maybeSingle();
+    .in("curriculum_id", curriculumIds).eq("number", input.lesson_number).maybeSingle();
   if (lErr) throw lErr;
   if (!lesson) throw new Error(`lesson ${input.lesson_number} not found`);
   const lessonId = lesson.id as number;
@@ -274,31 +294,30 @@ export async function completeLesson(userId: string, input: CompleteLessonInput)
 
 export async function addVocab(userId: string, item: VocabInput): Promise<string> {
   const admin = createAdminClient();
-  const farsi = item.farsi.trim();
+  const term = item.term.trim();
   const translit = item.transliteration.trim();
-  const english = item.english.trim();
-  if (!farsi || !translit || !english) throw new Error("farsi, transliteration, english required");
+  const translation = item.translation.trim();
+  if (!term || !translit || !translation) throw new Error("term, transliteration, translation required");
 
   const { data: profile, error: pErr } = await admin.from("profiles")
-    .select("active_course_id").eq("id", userId).single();
+    .select("active_curriculum_id").eq("id", userId).single();
   if (pErr) throw pErr;
-  if (!profile?.active_course_id) throw new Error("no active course — import one first");
+  if (!profile?.active_curriculum_id) throw new Error("no active curriculum — import one first");
 
-  // active_course_id is user-mutable via PostgREST; verify ownership before the admin-client write
-  const { data: ownedCourse, error: cErr } = await admin.from("courses")
-    .select("id").eq("id", profile.active_course_id).eq("owner_id", userId).maybeSingle();
+  // active_curriculum_id is user-mutable via PostgREST; verify ownership before the admin-client write
+  const { data: ownedCurriculum, error: cErr } = await admin.from("curriculums")
+    .select("id").eq("id", profile.active_curriculum_id).eq("owner_id", userId).maybeSingle();
   if (cErr) throw cErr;
-  if (!ownedCourse) throw new Error("no active course — import one first");
+  if (!ownedCurriculum) throw new Error("no active curriculum — import one first");
 
-  // Same diacritics rule as package import: plain farsi is the identity key.
-  const script = deriveVocabScript(farsi, item.farsi_vocalized?.trim() || null);
+  // Same diacritics rule as package import: plain term is the identity key.
+  const script = deriveVocabScript(term, item.term_vocalized?.trim() || null);
   const { data, error } = await admin.from("vocab_items").insert({
-    course_id: ownedCourse.id,
-    ...script, transliteration: translit, english,
+    curriculum_id: ownedCurriculum.id,
+    ...script, transliteration: translit, translation,
     part_of_speech: item.part_of_speech ?? null,
     lesson_id: item.lesson_id ?? null,
-    present_stem: item.present_stem ?? null,
-    past_stem: item.past_stem ?? null,
+    morphology: item.morphology ?? null,
     colloquial: item.colloquial ?? null,
     tags: ["manual"],
   }).select("id").single();
@@ -306,21 +325,16 @@ export async function addVocab(userId: string, item: VocabInput): Promise<string
   return data.id as string;
 }
 
-// Same second-course guard and message as src/app/import/actions.ts.
+// Same second-curriculum guard and message as src/app/curriculums/import/actions.ts.
 export async function importPackage(userId: string, pkg: ContentPackage) {
   const admin = createAdminClient();
-  const { data: ownedCourses, error: ownedErr } = await admin.from("courses")
+  const { data: ownedCurriculums, error: ownedErr } = await admin.from("curriculums")
     .select("name").eq("owner_id", userId);
   if (ownedErr) throw ownedErr;
-  const hasOtherCourse = (ownedCourses ?? []).length > 0
-    && !(ownedCourses ?? []).some((c) => c.name === pkg.course.name);
-  if (hasOtherCourse) {
-    const existingName = (ownedCourses ?? [])[0].name;
-    throw new Error(
-      `You already have a course ('${existingName}'). Multi-course support isn't ready yet — ` +
-      `to add content to your existing course, set course.name to exactly '${existingName}' in the package.`,
-    );
-  }
+  const conflict = curriculumConflictMessage(
+    (ownedCurriculums ?? []).map((c) => c.name as string), pkg.curriculum.name,
+  );
+  if (conflict) throw new Error(conflict);
   return importContentPackage(admin, userId, pkg);
 }
 

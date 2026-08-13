@@ -291,31 +291,35 @@ async function main() {
     // --- get_review_queue ---
     const queueResult = await callTool(token, "get_review_queue");
     assert(Array.isArray(queueResult) && queueResult.length > 0, `get_review_queue returned no items: ${JSON.stringify(queueResult)}`);
-    const queue = queueResult as { vocab_id: string }[];
+    const queue = queueResult as { vocab_id: string; term: string; translation: string }[];
     assert(queue.length <= 20, `get_review_queue returned ${queue.length} items, expected <= 20`);
     const firstItem = queue[0];
     assert(typeof firstItem.vocab_id === "string", `queue item missing vocab_id: ${JSON.stringify(firstItem)}`);
+    assert(typeof firstItem.term === "string" && firstItem.term.length > 0,
+      `queue item missing term field: ${JSON.stringify(firstItem)}`);
+    assert(typeof firstItem.translation === "string" && firstItem.translation.length > 0,
+      `queue item missing translation field: ${JSON.stringify(firstItem)}`);
     gradedVocabId = firstItem.vocab_id;
 
-    // Cross-check: each vocab_id in the queue must exist in vocab_items owned by the user's courses
+    // Cross-check: each vocab_id in the queue must exist in vocab_items owned by the user's curriculums
     const queueVocabIds = queue.map((item) => item.vocab_id);
 
-    // Get the user's owned courses
-    const { data: userCourses, error: coursesErr } = await admin
-      .from("courses").select("id").eq("owner_id", userId);
-    if (coursesErr) fail(`failed to get user courses: ${coursesErr?.message}`);
-    const courseIds = (userCourses ?? []).map((c) => c.id as string);
+    // Get the user's owned curriculums
+    const { data: userCurriculums, error: curriculumsErr } = await admin
+      .from("curriculums").select("id").eq("owner_id", userId);
+    if (curriculumsErr) fail(`failed to get user curriculums: ${curriculumsErr?.message}`);
+    const curriculumIds = (userCurriculums ?? []).map((c) => c.id as string);
 
-    if (courseIds.length > 0 && queueVocabIds.length > 0) {
+    if (curriculumIds.length > 0 && queueVocabIds.length > 0) {
       const { data: vocabCheck, error: vocabErr } = await admin
         .from("vocab_items").select("id", { count: "exact" })
         .in("id", queueVocabIds)
-        .in("course_id", courseIds);
+        .in("curriculum_id", curriculumIds);
       if (vocabErr) fail(`failed to cross-check queue vocab_ids: ${vocabErr.message}`);
       const vocabCheckCount = vocabCheck?.length ?? 0;
       assert(
         vocabCheckCount === queueVocabIds.length,
-        `queue vocab_id mismatch: found ${vocabCheckCount}/${queueVocabIds.length} in user's courses`,
+        `queue vocab_id mismatch: found ${vocabCheckCount}/${queueVocabIds.length} in user's curriculums`,
       );
     }
 

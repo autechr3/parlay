@@ -2,7 +2,7 @@ import { createMcpHandler } from "mcp-handler";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { authenticateToken } from "@/lib/api-tokens-server";
-import { ContentPackageSchema } from "@/lib/content-package";
+import { parseAnyPackage } from "@/lib/content-package";
 import {
   getStudyState,
   getLesson,
@@ -86,7 +86,7 @@ function registerTools(server: McpServer, userId: string) {
     "search_vocab",
     {
       description:
-        "Search the learner's vocabulary by Farsi, transliteration, or English text, to look up a specific word during a conversation or lesson.",
+        "Search the learner's vocabulary by term, transliteration, or translation text, to look up a specific word during a conversation or lesson.",
       inputSchema: z.object({
         query: z.string().min(1),
         ...limitShape,
@@ -137,15 +137,14 @@ function registerTools(server: McpServer, userId: string) {
     "add_vocab",
     {
       description:
-        "Add a new vocabulary item to the learner's active course, when a new word comes up that isn't tracked yet.",
+        "Add a new vocabulary item to the learner's active curriculum, when a new word comes up that isn't tracked yet.",
       inputSchema: z.object({
-        farsi: z.string().min(1),
-        farsi_vocalized: z.string().optional(),
+        term: z.string().min(1),
+        term_vocalized: z.string().optional(),
         transliteration: z.string().min(1),
-        english: z.string().min(1),
+        translation: z.string().min(1),
         part_of_speech: z.string().optional(),
-        present_stem: z.string().optional(),
-        past_stem: z.string().optional(),
+        morphology: z.record(z.string(), z.string()).optional(),
         colloquial: z.string().optional(),
       }),
     },
@@ -156,7 +155,7 @@ function registerTools(server: McpServer, userId: string) {
     "import_content_package",
     {
       description:
-        "Import or update a course's units, lessons, vocab, and exercises from a farsi-tracker content package, when generating or loading new course content.",
+        "Import or update a curriculum's units, lessons, vocab, and exercises from a farsi-tracker content package, when generating or loading new curriculum content.",
       inputSchema: z.object({ package: z.unknown() }),
     },
     ({ package: pkg }) =>
@@ -169,11 +168,17 @@ function registerTools(server: McpServer, userId: string) {
             throw new Error(`package is not valid JSON: ${(e as Error).message}`);
           }
         }
-        const parsed = ContentPackageSchema.safeParse(raw);
-        if (!parsed.success) {
-          return { valid: false, issues: parsed.error.issues };
+        // parseAnyPackage upconverts a v1 payload (course{...}) to v2 (curriculum{...})
+        // before validating, so both legacy and current generator prompts work here.
+        try {
+          const parsed = parseAnyPackage(raw);
+          return importPackage(userId, parsed);
+        } catch (e) {
+          if (e instanceof z.ZodError) {
+            return { valid: false, issues: e.issues };
+          }
+          throw e;
         }
-        return importPackage(userId, parsed.data);
       }),
   );
 

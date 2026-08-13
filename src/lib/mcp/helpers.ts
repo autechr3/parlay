@@ -27,3 +27,17 @@ export function rankErrors(
     .slice(0, top)
     .map(([error, count]) => ({ error, count }));
 }
+
+// Multi-curriculum isn't supported yet: importing a package whose curriculum.name doesn't
+// match an existing owned curriculum would silently create a second curriculum the MCP
+// caller has no way to switch to. Same guard and wording as
+// src/app/curriculums/import/actions.ts's inline check — pulled out here as a pure function
+// (no DB access) so the decision is unit-testable without a mocked SupabaseClient.
+// Returns the error message to throw, or null when the import may proceed.
+export function curriculumConflictMessage(ownedNames: string[], packageName: string): string | null {
+  const hasOtherCurriculum = ownedNames.length > 0 && !ownedNames.includes(packageName);
+  if (!hasOtherCurriculum) return null;
+  const existingName = ownedNames[0];
+  return `You already have a curriculum ('${existingName}'). Multi-curriculum support isn't ready yet — ` +
+    `to add content to your existing curriculum, set curriculum.name to exactly '${existingName}' in the package.`;
+}
