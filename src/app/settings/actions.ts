@@ -35,6 +35,7 @@ export async function updateSettings(formData: FormData) {
     daily_new_limit: int("daily_new_limit", 0, 200, 20),
     daily_review_limit: int("daily_review_limit", 0, 1000, 120),
     fa_scale: int("fa_scale", 100, 200, 125),
+    show_diacritics: formData.get("show_diacritics") === "on",
   }).eq("id", user.id);
   if (error) throw error;
   revalidatePath("/settings");

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ContentPackageSchema, slugify, buildLessonPayload } from "../src/lib/content-package";
+import { ContentPackageSchema, slugify, buildLessonPayload, deriveVocabScript } from "../src/lib/content-package";
 
 const minimal = {
   format: "farsi-tracker/content-package", version: 1,
@@ -30,6 +30,22 @@ describe("ContentPackageSchema", () => {
     const bad = { ...minimal, lessons: [{ number: 1, title: "t",
       exercises: [{ type: "multiple_choice", prompt: "p", answer: "a" }] }] };
     expect(ContentPackageSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe("deriveVocabScript — diacritics never leak into the identity key", () => {
+  it("plain farsi, no vocalized form → plain only", () =>
+    expect(deriveVocabScript("کتاب")).toEqual({ farsi: "کتاب" }));
+  it("explicit vocalized form is kept, farsi stripped to plain", () =>
+    expect(deriveVocabScript("رفتن", "رَفتَن"))
+      .toEqual({ farsi: "رفتن", farsi_vocalized: "رَفتَن" }));
+  it("diacritics baked into farsi migrate to farsi_vocalized", () =>
+    expect(deriveVocabScript("رَفتَن"))
+      .toEqual({ farsi: "رفتن", farsi_vocalized: "رَفتَن" }));
+  it("schema accepts farsi_vocalized on vocab items", () => {
+    const pkg = { ...minimal, lessons: [{ number: 1, title: "t",
+      vocab: [{ farsi: "رفتن", farsi_vocalized: "رَفتَن", transliteration: "raftan", english: "to go" }] }] };
+    expect(ContentPackageSchema.safeParse(pkg).success).toBe(true);
   });
 });
 

@@ -140,6 +140,7 @@ function registerTools(server: McpServer, userId: string) {
         "Add a new vocabulary item to the learner's active course, when a new word comes up that isn't tracked yet.",
       inputSchema: z.object({
         farsi: z.string().min(1),
+        farsi_vocalized: z.string().optional(),
         transliteration: z.string().min(1),
         english: z.string().min(1),
         part_of_speech: z.string().optional(),

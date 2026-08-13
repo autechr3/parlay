@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { faNormalize } from "@/lib/farsi";
-import { importContentPackage, type ContentPackage } from "@/lib/content-package";
+import { importContentPackage, deriveVocabScript, type ContentPackage } from "@/lib/content-package";
 import { pickWeakSkills, rankErrors } from "./helpers";
 
 // Re-exported so any caller that only needs the data layer's surface can import
@@ -47,6 +47,7 @@ export type CompleteLessonInput = {
 
 export type VocabInput = {
   farsi: string;
+  farsi_vocalized?: string | null;
   transliteration: string;
   english: string;
   part_of_speech?: string | null;
@@ -289,9 +290,11 @@ export async function addVocab(userId: string, item: VocabInput): Promise<string
   if (cErr) throw cErr;
   if (!ownedCourse) throw new Error("no active course — import one first");
 
+  // Same diacritics rule as package import: plain farsi is the identity key.
+  const script = deriveVocabScript(farsi, item.farsi_vocalized?.trim() || null);
   const { data, error } = await admin.from("vocab_items").insert({
     course_id: ownedCourse.id,
-    farsi, transliteration: translit, english,
+    ...script, transliteration: translit, english,
     part_of_speech: item.part_of_speech ?? null,
     lesson_id: item.lesson_id ?? null,
     present_stem: item.present_stem ?? null,

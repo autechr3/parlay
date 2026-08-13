@@ -9,7 +9,7 @@ export default async function VocabPage({ searchParams }:
   const { data: { user } } = await supabase.auth.getUser();
 
   let query = supabase.from("vocab_items")
-    .select("id, farsi, transliteration, english, part_of_speech, lesson_id, tags, lessons(number)")
+    .select("id, farsi, farsi_vocalized, transliteration, english, part_of_speech, lesson_id, tags, lessons(number)")
     .order("farsi").limit(500);
   if (q) {
     const isFa = /[\u0600-\u06FF]/.test(q);
@@ -23,10 +23,15 @@ export default async function VocabPage({ searchParams }:
   if (lesson) query = query.eq("lesson_id", Number(lesson));
   if (pos) query = query.eq("part_of_speech", pos);
   const { data: items } = await query;
+  const { data: prof } = await supabase.from("profiles")
+    .select("show_diacritics").eq("id", user!.id).single();
+  const resolved = (items ?? []).map((v) => ({
+    ...v, farsi: prof?.show_diacritics && v.farsi_vocalized ? v.farsi_vocalized : v.farsi,
+  }));
   const { data: reviews } = await supabase.from("vocab_reviews")
     .select("vocab_id, due_on, ease, repetitions, suspended").eq("user_id", user!.id);
   const { data: lessons } = await supabase.from("lessons").select("id, number").order("number");
 
-  return <VocabTable items={items ?? []} reviews={reviews ?? []} lessons={lessons ?? []}
+  return <VocabTable items={resolved} reviews={reviews ?? []} lessons={lessons ?? []}
     initialQuery={q ?? ""} initialLesson={lesson ?? ""} initialPos={pos ?? ""} />;
 }

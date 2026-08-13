@@ -21,9 +21,9 @@ You must return a single JSON object in the "farsi-tracker/content-package" form
       "is_assessment": false,
       "body_md": "# Lesson 04 — ...",
       "vocab": [
-        { "farsi": "رفتن", "transliteration": "raftan", "english": "to go",
-          "part_of_speech": "verb", "present_stem": "رو", "past_stem": "رفت",
-          "colloquial": null, "tags": [] }
+        { "farsi": "رفتن", "farsi_vocalized": "رَفتَن", "transliteration": "raftan",
+          "english": "to go", "part_of_speech": "verb", "present_stem": "رو",
+          "past_stem": "رفت", "colloquial": null, "tags": [] }
       ],
       "exercises": [
         { "type": "en_to_fa", "prompt": "I am going home",
@@ -46,6 +46,11 @@ Field notes:
   updated in place, never duplicated.
 - "lessons[].vocab" (optional array): each item is upserted on (course, lesson, farsi). Only "farsi",
   "transliteration" and "english" are required per vocab item; the rest may be omitted or null.
+- "lessons[].vocab[].farsi_vocalized" (strongly encouraged): the word with FULL diacritics
+  (زَبَر/زیر/پیش, tashdid, sukun) so learners can toggle vowel marks on. "farsi" itself must stay
+  PLAIN — no diacritics — because it is the identity key that preserves the learner's review
+  history across re-imports. Re-sending existing vocab with farsi_vocalized added enriches the
+  existing rows in place.
 - "lessons[].exercises" (optional array): when present, it REPLACES all existing exercises for that
   lesson. When the "exercises" key is absent entirely (not just empty), existing exercises for that
   lesson are left untouched — use this to send vocab-only or metadata-only updates.

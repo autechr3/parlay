@@ -29,16 +29,20 @@ export default async function FlashcardsPage({ searchParams }:
   const selectedIds = learned.filter((l) => selected.includes(l.number)).map((l) => l.id);
 
   let query = supabase.from("vocab_items")
-    .select("id, farsi, transliteration, english, part_of_speech, present_stem, past_stem")
+    .select("id, farsi, farsi_vocalized, transliteration, english, part_of_speech, present_stem, past_stem")
     .in("lesson_id", selectedIds.length ? selectedIds : [-1]);
   if (deck === "conjugations") query = query.eq("part_of_speech", "verb").not("present_stem", "is", null);
   const { data: vocab } = await query;
+  const { data: prof } = await supabase.from("profiles")
+    .select("show_diacritics").eq("id", user!.id).single();
+  const fa = (v: { farsi: string; farsi_vocalized: string | null }) =>
+    prof?.show_diacritics && v.farsi_vocalized ? v.farsi_vocalized : v.farsi;
 
   const cards: DeckCard[] = (vocab ?? []).map((v) =>
     deck === "conjugations"
-      ? { id: v.id, farsi: v.farsi, translit: v.transliteration, english: v.english,
+      ? { id: v.id, farsi: fa(v), translit: v.transliteration, english: v.english,
           kind: "verb" as const, presentStem: v.present_stem!, pastStem: v.past_stem }
-      : { id: v.id, farsi: v.farsi, translit: v.transliteration, english: v.english, kind: "vocab" as const });
+      : { id: v.id, farsi: fa(v), translit: v.transliteration, english: v.english, kind: "vocab" as const });
 
   return (
     <main className="mx-auto max-w-2xl p-6">

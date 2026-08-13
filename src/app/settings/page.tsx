@@ -33,6 +33,8 @@ export default async function SettingsPage() {
           <input type="number" name="daily_review_limit" min={0} max={1000}
             defaultValue={p.daily_review_limit} className={input} /></label>
         <FaScaleSlider initial={p.fa_scale} />
+        <label className={field}>Show diacritics when available
+          <input type="checkbox" name="show_diacritics" defaultChecked={p.show_diacritics} /></label>
         <button className="rounded bg-black p-3 text-white">Save</button>
       </form>
       <TokenManager tokens={tokens ?? []} />

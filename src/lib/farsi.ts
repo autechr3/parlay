@@ -10,6 +10,12 @@ export function toWesternDigits(s: string): string {
   return s.replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d)));
 }
 
+// Harakat + Quranic marks (U+064B–U+0655) and superscript alef (U+0670) used in
+// vocalized Persian. Deliberately excludes ZWNJ (U+200C) — that carries meaning.
+export function stripFaDiacritics(s: string): string {
+  return s.replace(new RegExp("[\\u064B-\\u0655\\u0670]", "g"), "");
+}
+
 // Mirrors SQL fa_normalize exactly. For search/comparison ONLY — never for display or storage.
 export function faNormalize(s: string): string {
   return s

@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { stripFaDiacritics } from "./farsi";
 
 const VocabSchema = z.object({
   farsi: z.string().trim().min(1), transliteration: z.string().trim().min(1),
-  english: z.string().trim().min(1),
+  english: z.string().trim().min(1), farsi_vocalized: z.string().trim().min(1).nullish(),
   part_of_speech: z.string().nullish(), present_stem: z.string().nullish(),
   past_stem: z.string().nullish(), colloquial: z.string().nullish(),
   tags: z.array(z.string()).default([]), notes: z.string().nullish(),
@@ -43,6 +44,18 @@ export const ContentPackageSchema = z.object({
 });
 export type ContentPackage = z.infer<typeof ContentPackageSchema>;
 export type ImportResult = { courseId: string; units: number; lessons: number; vocab: number; exercises: number };
+
+// vocab_items are upserted on (course, lesson, farsi), so diacritics in the farsi
+// field would mint a NEW row and orphan the word's SRS history. The plain form is
+// always the identity key; the vocalized form (explicit, or farsi itself when an
+// agent baked marks into it) rides along in farsi_vocalized.
+export function deriveVocabScript(
+  farsi: string, vocalized?: string | null,
+): { farsi: string; farsi_vocalized?: string } {
+  const plain = stripFaDiacritics(farsi);
+  const voc = vocalized ?? (plain !== farsi ? farsi : undefined);
+  return voc ? { farsi: plain, farsi_vocalized: voc } : { farsi: plain };
+}
 
 export function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -124,9 +137,12 @@ export async function importContentPackage(
     if (lErr) throw lErr;
 
     for (const v of l.vocab ?? []) {
+      // Presence-aware: farsi_vocalized joins the payload only when derivable, so a
+      // re-import without it doesn't null out an existing vocalized form.
+      const script = deriveVocabScript(v.farsi, v.farsi_vocalized);
       const { error } = await supabase.from("vocab_items").upsert({
         course_id: courseId, lesson_id: lesson.id,
-        farsi: v.farsi, transliteration: v.transliteration, english: v.english,
+        ...script, transliteration: v.transliteration, english: v.english,
         part_of_speech: v.part_of_speech ?? null, present_stem: v.present_stem ?? null,
         past_stem: v.past_stem ?? null, colloquial: v.colloquial ?? null,
         tags: v.tags, notes: v.notes ?? null,

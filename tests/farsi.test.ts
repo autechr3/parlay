@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   toPersianDigits, toWesternDigits, faNormalize, levenshtein,
-  checkTypedAnswer, conjugatePresent, conjugatePast,
+  checkTypedAnswer, conjugatePresent, conjugatePast, stripFaDiacritics,
 } from "../src/lib/farsi";
 
 describe("digits", () => {
@@ -18,6 +18,15 @@ describe("faNormalize (must mirror SQL fa_normalize)", () => {
   it("strips diacritics", () => expect(faNormalize("کتابِ خوب")).toBe("کتاب خوب"));
   it("ZWNJ becomes space", () => expect(faNormalize("می‌روم")).toBe("می روم"));
   it("collapses whitespace", () => expect(faNormalize("  سلام   دنیا ")).toBe("سلام دنیا"));
+});
+
+describe("stripFaDiacritics", () => {
+  it("removes harakat, tashdid, sukun, tanvin", () =>
+    expect(stripFaDiacritics("مَنْ کِتابِ خُوبٌ مُعَلِّم")).toBe("من کتاب خوب معلم"));
+  it("preserves ZWNJ and base letters", () =>
+    expect(stripFaDiacritics("می‌رَوَم")).toBe("می‌روم"));
+  it("leaves plain text untouched", () =>
+    expect(stripFaDiacritics("کتاب‌ها")).toBe("کتاب‌ها"));
 });
 
 describe("checkTypedAnswer", () => {
