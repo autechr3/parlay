@@ -27,6 +27,13 @@ describe("FlashcardDeck", () => {
     expect(getByText("رفتم")).toBeTruthy();                // past 1sg
     expect(container.textContent).toContain("من");
   });
+  it("shows script, transliteration, and english together on vocab flip", () => {
+    const { getByText } = render(<FlashcardDeck cards={cards} />);
+    fireEvent.keyDown(window, { key: " " });              // flip vocab card
+    expect(getByText("کتاب")).toBeTruthy();
+    expect(getByText("ketâb")).toBeTruthy();
+    expect(getByText("book")).toBeTruthy();
+  });
   it("counter uses positions", () => {
     const { getByText } = render(<FlashcardDeck cards={cards} />);
     expect(getByText(/1\s*\/\s*2/)).toBeTruthy();

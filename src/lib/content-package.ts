@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const VocabSchema = z.object({
-  farsi: z.string().min(1), transliteration: z.string().min(1), english: z.string().min(1),
+  farsi: z.string().trim().min(1), transliteration: z.string().trim().min(1),
+  english: z.string().trim().min(1),
   part_of_speech: z.string().nullish(), present_stem: z.string().nullish(),
   past_stem: z.string().nullish(), colloquial: z.string().nullish(),
   tags: z.array(z.string()).default([]), notes: z.string().nullish(),

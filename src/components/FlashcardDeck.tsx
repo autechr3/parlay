@@ -53,7 +53,8 @@ export function FlashcardDeck({ cards: initial }: { cards: DeckCard[] }) {
         {!flipped && <FarsiText farsi={card.farsi} translit={card.translit} english={card.english} />}
         {flipped && card.kind === "vocab" && (
           <>
-            <FarsiText farsi={card.farsi} translit={card.translit} />
+            <FarsiText farsi={card.farsi} />
+            <p className="text-xl italic text-gray-600">{card.translit}</p>
             <p className="text-xl text-gray-700">{card.english}</p>
           </>
         )}

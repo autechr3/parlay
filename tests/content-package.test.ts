@@ -16,6 +16,16 @@ describe("ContentPackageSchema", () => {
     const bad = { ...minimal, lessons: [{ title: "no number" }] };
     expect(ContentPackageSchema.safeParse(bad).success).toBe(false);
   });
+  it("rejects vocab missing transliteration", () => {
+    const bad = { ...minimal, lessons: [{ number: 1, title: "t",
+      vocab: [{ farsi: "کتاب", english: "book" }] }] };
+    expect(ContentPackageSchema.safeParse(bad).success).toBe(false);
+  });
+  it("rejects whitespace-only vocab fields", () => {
+    const bad = { ...minimal, lessons: [{ number: 1, title: "t",
+      vocab: [{ farsi: "کتاب", transliteration: "   ", english: "book" }] }] };
+    expect(ContentPackageSchema.safeParse(bad).success).toBe(false);
+  });
   it("rejects unknown exercise type", () => {
     const bad = { ...minimal, lessons: [{ number: 1, title: "t",
       exercises: [{ type: "multiple_choice", prompt: "p", answer: "a" }] }] };
