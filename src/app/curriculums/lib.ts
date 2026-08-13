@@ -62,6 +62,19 @@ export type ExportFilter =
   | { op: "eq"; column: string; value: string }
   | { op: "in"; column: string; values: (number | string)[] };
 
+// A curriculum with zero exercises (or zero vocab — both are optional at import) yields an empty
+// id list. supabase-js happily builds `.in(col, [])` into `col=in.()`, which is not guaranteed to
+// behave like "match nothing" across PostgREST versions/columns — the rest of the app never
+// relies on that and always guards with a sentinel that provably matches no real row instead (see
+// src/app/curriculums/page.tsx and src/app/flashcards/page.tsx, both `values.length ? values :
+// [-1]` for int id columns). lesson_id is an int (serial) column, so -1 works there; exercise_id
+// and vocab_id are uuid columns, where -1 would fail to even parse as a uuid, so those get the nil
+// uuid instead — still a value guaranteed never to be assigned by gen_random_uuid().
+const NO_MATCH_INT = -1;
+const NO_MATCH_UUID = "00000000-0000-0000-0000-000000000000";
+const intOrSentinel = (values: number[]): number[] => (values.length ? values : [NO_MATCH_INT]);
+const uuidOrSentinel = (values: string[]): string[] => (values.length ? values : [NO_MATCH_UUID]);
+
 // Returns null when a table has no curriculum-scoped column at all (profiles, practice_sessions,
 // skill_ratings, study_days, email_log) — those stay user-scoped exactly as the unscoped export
 // already behaves, since day-aggregates and free-form logs aren't reliably per-curriculum.
@@ -76,14 +89,14 @@ export function exportTableFilter(table: string, scope: ExportScope | null): Exp
     case "exercises":
       return { op: "eq", column: "curriculum_id", value: scope.curriculumId };
     case "lesson_completions":
-      return { op: "in", column: "lesson_id", values: scope.lessonIds };
+      return { op: "in", column: "lesson_id", values: intOrSentinel(scope.lessonIds) };
     // exercise_attempts has no lesson_id column (only exercise_id) — exercises already carry
     // curriculum_id directly, so scope through the curriculum's exercise ids instead.
     case "exercise_attempts":
-      return { op: "in", column: "exercise_id", values: scope.exerciseIds };
+      return { op: "in", column: "exercise_id", values: uuidOrSentinel(scope.exerciseIds) };
     case "vocab_reviews":
     case "review_log":
-      return { op: "in", column: "vocab_id", values: scope.vocabIds };
+      return { op: "in", column: "vocab_id", values: uuidOrSentinel(scope.vocabIds) };
     default:
       return null;
   }

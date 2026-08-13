@@ -176,4 +176,31 @@ describe("exportTableFilter", () => {
       expect(exportTableFilter(t, scope)).toBeNull();
     }
   });
+
+  it("guards empty id lists with a never-match sentinel instead of an empty .in() array", () => {
+    // A curriculum can legitimately have zero exercises/vocab (both optional at import) and,
+    // transiently, zero completed lessons — `.in(col, [])` must never be handed to supabase-js.
+    const emptyScope: ExportScope = {
+      curriculumId: "curric-empty", lessonIds: [], vocabIds: [], exerciseIds: [],
+    };
+    // lesson_id is an int column — the sentinel must itself be a plausible int, never [].
+    const lessonFilter = exportTableFilter("lesson_completions", emptyScope);
+    expect(lessonFilter).not.toEqual({ op: "in", column: "lesson_id", values: [] });
+    expect(lessonFilter).toEqual({ op: "in", column: "lesson_id", values: [-1] });
+
+    // exercise_id/vocab_id are uuid columns — -1 isn't valid uuid input, so these need a
+    // well-formed-but-unassignable uuid sentinel rather than reusing the int one.
+    const exerciseFilter = exportTableFilter("exercise_attempts", emptyScope);
+    expect(exerciseFilter).not.toEqual({ op: "in", column: "exercise_id", values: [] });
+    expect(exerciseFilter).toEqual({
+      op: "in", column: "exercise_id", values: ["00000000-0000-0000-0000-000000000000"],
+    });
+
+    const vocabReviewsFilter = exportTableFilter("vocab_reviews", emptyScope);
+    const reviewLogFilter = exportTableFilter("review_log", emptyScope);
+    for (const filter of [vocabReviewsFilter, reviewLogFilter]) {
+      expect(filter).not.toEqual({ op: "in", column: "vocab_id", values: [] });
+      expect(filter).toEqual({ op: "in", column: "vocab_id", values: ["00000000-0000-0000-0000-000000000000"] });
+    }
+  });
 });
