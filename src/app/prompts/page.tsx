@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CopyPromptButton } from "@/components/CopyPromptButton";
 import {
   buildCreateCoursePrompt, buildNextLessonsPrompt, buildExercisesPrompt, buildAddVocabPrompt,
-  type CourseState,
+  type CurriculumState,
 } from "@/lib/agent-prompts";
 
 const COUNT_OPTIONS = [1, 5, 10] as const;
@@ -35,44 +35,51 @@ export default async function PromptsPage({
   const uid = user!.id;
 
   const { data: profile } = await supabase.from("profiles")
-    .select("active_course_id").eq("id", uid).single();
-  const courseId = profile?.active_course_id;
+    .select("active_curriculum_id").eq("id", uid).single();
+  const curriculumId = profile?.active_curriculum_id;
 
-  if (!courseId) {
+  if (!curriculumId) {
     return (
       <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Prompts</h1>
+        <p className="text-gray-500">
+          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+        </p>
         <PromptSection
-          heading="Create a course"
-          when="Use this first — no course yet. Paste the result into /import."
+          heading="Create a curriculum"
+          when="Use this first — no curriculum yet. Paste the result into /import."
           prompt={buildCreateCoursePrompt()}
         />
       </main>
     );
   }
 
-  const [{ data: course }, { data: units }, { data: lessons }, { data: vocab }] = await Promise.all([
-    supabase.from("courses").select("name").eq("id", courseId).single(),
-    supabase.from("units").select("title").eq("course_id", courseId).order("number"),
-    supabase.from("lessons").select("id, number, title, grammar_points").eq("course_id", courseId).order("number"),
+  const [{ data: curriculum }, { data: units }, { data: lessons }, { data: vocab }] = await Promise.all([
+    supabase.from("curriculums").select("name, language_code, languages(name)").eq("id", curriculumId).single(),
+    supabase.from("units").select("title").eq("curriculum_id", curriculumId).order("number"),
+    supabase.from("lessons").select("id, number, title, grammar_points").eq("curriculum_id", curriculumId).order("number"),
     // No created_at column on vocab_items — take the query's natural (insertion-order) return
     // and slice the last 60 rather than adding an explicit orderBy this table doesn't support.
-    supabase.from("vocab_items").select("farsi, lesson_id").eq("course_id", courseId),
+    supabase.from("vocab_items").select("term, lesson_id").eq("curriculum_id", curriculumId),
   ]);
 
   const lessonRows = lessons ?? [];
   const maxLesson = lessonRows.reduce((m, l) => Math.max(m, l.number), 0);
-  const recentVocab = (vocab ?? []).slice(-60).map((v) => v.farsi);
+  const recentVocab = (vocab ?? []).slice(-60).map((v) => v.term);
 
   const vocabByLessonId = new Map<number, string[]>();
   for (const v of vocab ?? []) {
     if (v.lesson_id == null) continue;
     const arr = vocabByLessonId.get(v.lesson_id) ?? [];
-    arr.push(v.farsi);
+    arr.push(v.term);
     vocabByLessonId.set(v.lesson_id, arr);
   }
-  const state: CourseState = {
-    courseName: course?.name ?? "",
+
+  const languageRow = curriculum?.languages as unknown as { name: string } | null;
+  const state: CurriculumState = {
+    curriculumName: curriculum?.name ?? "",
+    languageCode: curriculum?.language_code ?? "fa",
+    languageName: languageRow?.name ?? "Persian",
     maxLesson,
     unitTitles: (units ?? []).map((u) => u.title),
     grammarCovered: [...new Set(lessonRows.flatMap((l) => l.grammar_points ?? []))],
@@ -93,19 +100,19 @@ export default async function PromptsPage({
       <h1 className="text-2xl font-bold">Prompts</h1>
       <p className="text-sm text-gray-600">
         Copy-paste prompts for your AI agent, generated from{" "}
-        <span className="font-medium">{state.courseName}</span>&apos;s current state. Paste the
+        <span className="font-medium">{state.curriculumName}</span>&apos;s current state. Paste the
         agent&apos;s JSON reply into <Link href="/curriculums/import" className="underline">Import</Link>.
       </p>
 
       <PromptSection
-        heading="Create a course"
+        heading="Create a curriculum"
         when="Start a brand-new curriculum from scratch."
         prompt={buildCreateCoursePrompt()}
       />
 
       <PromptSection
         heading="Generate the next lessons"
-        when={`Extend the course past lesson ${state.maxLesson} without repeating grammar or vocab.`}
+        when={`Extend the curriculum past lesson ${state.maxLesson} without repeating grammar or vocab.`}
         prompt={buildNextLessonsPrompt(state, count)}
         extra={
           <form className="mb-2 flex items-center gap-2 text-sm">

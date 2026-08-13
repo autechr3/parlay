@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
           db.from("vocab_reviews").select("id", { count: "exact", head: true })
             .eq("user_id", u.id).eq("suspended", false).lte("due_on", u.local_date),
           db.rpc("current_streak", { p_user: u.id }),
-          db.from("vocab_reviews").select("vocab_items(farsi, transliteration, english)")
+          db.from("vocab_reviews").select("vocab_items(term, transliteration, translation)")
             .eq("user_id", u.id).eq("suspended", false).lte("due_on", u.local_date).limit(3),
           db.rpc("next_lesson_for", { p_user: u.id }),
           db.from("lesson_completions").select("negar_drill_done")
@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
         : "";
       const drill = (warmup ?? [])
         .map((w) => {
-          const v = w.vocab_items as unknown as { farsi: string; transliteration: string; english: string };
-          return `<li>${FA_SPAN(esc(v.farsi))} — <a href="${site}/review">show answer</a></li>`;
+          const v = w.vocab_items as unknown as { term: string; transliteration: string; translation: string };
+          return `<li>${FA_SPAN(esc(v.term))} — <a href="${site}/review">show answer</a></li>`;
         }).join("");
       const html = `${EMAIL_HEAD}
         <p><b>${due ?? 0} cards due</b> — <a href="${site}/review">review now</a></p>
