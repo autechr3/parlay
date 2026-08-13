@@ -17,11 +17,21 @@ export default async function CurriculumsPage() {
   if (!curriculums || curriculums.length === 0) {
     return (
       <main className="mx-auto max-w-2xl p-6">
-        <h1 className="mb-4 text-2xl font-bold">Library</h1>
-        <p className="text-gray-500">
-          <Link className="underline" href="/curriculums/import">Import your first curriculum</Link> to get
-          started — or grab a generator prompt from <Link className="underline" href="/prompts">Prompts</Link>.
+        <h1 className="mb-4 text-2xl font-bold">Set up your AI tutor</h1>
+        <p className="mb-4 text-gray-500">
+          Connect an AI tool and it builds your first curriculum for you — or grab a generator
+          prompt from <Link className="underline" href="/prompts">Prompts</Link> to paste in yourself.
         </p>
+        <Link href="/welcome" className="inline-block rounded bg-black px-4 py-2 text-sm text-white">
+          Set up your AI tutor
+        </Link>
+        <details className="mt-6 text-sm text-gray-500">
+          <summary className="cursor-pointer font-semibold">Advanced</summary>
+          <p className="mt-2">
+            Already have a content package?{" "}
+            <Link href="/curriculums/import" className="underline">Manual import</Link>.
+          </p>
+        </details>
       </main>
     );
   }
@@ -65,15 +75,17 @@ export default async function CurriculumsPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Library</h1>
-        <Link href="/curriculums/import" className="rounded bg-black px-4 py-2 text-sm text-white">
-          Import curriculum
-        </Link>
-      </div>
+      <h1 className="mb-6 text-2xl font-bold">Library</h1>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {cards.map((c) => <CurriculumCard key={c.id} curriculum={c} />)}
       </div>
+      <details className="mt-6 text-sm text-gray-500">
+        <summary className="cursor-pointer font-semibold">Advanced</summary>
+        <Link href="/curriculums/import"
+          className="mt-2 inline-block rounded border px-3 py-1 text-sm text-black">
+          Manual import
+        </Link>
+      </details>
     </main>
   );
 }

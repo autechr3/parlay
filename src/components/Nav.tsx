@@ -4,7 +4,7 @@ const LINKS = [
   ["/curriculums", "Library"],
   ["/", "Dashboard"], ["/review", "Review"], ["/flashcards", "Flashcards"],
   ["/lessons", "Lessons"], ["/vocab", "Vocab"], ["/progress", "Progress"],
-  ["/curriculums/import", "Import"], ["/prompts", "Prompts"],
+  ["/prompts", "Prompts"],
   ["/settings", "Settings"],
 ] as const;
 

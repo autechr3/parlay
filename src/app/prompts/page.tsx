@@ -55,8 +55,7 @@ export default async function PromptsPage({
       <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Prompts</h1>
         <p className="text-gray-500">
-          Ask your connected tutor to build your first curriculum, or{" "}
-          <Link className="underline" href="/curriculums">import one to get started</Link>.
+          <Link className="underline" href="/welcome">Set up your AI tutor to generate your first curriculum</Link>.
         </p>
         <PromptSection
           heading="Create a curriculum"

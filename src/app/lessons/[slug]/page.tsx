@@ -19,7 +19,7 @@ export default async function LessonPage({ params, searchParams }:
       <main className="mx-auto max-w-xl p-6">
         <h1 className="text-xl font-bold">No active curriculum</h1>
         <p className="mt-4 text-gray-600">
-          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+          <Link className="underline" href="/welcome">Set up your AI tutor to generate your first curriculum</Link>.
         </p>
       </main>
     );

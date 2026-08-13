@@ -17,7 +17,7 @@ export default async function FlashcardsPage({ searchParams }:
       <main className="mx-auto max-w-2xl p-6">
         <h1 className="mb-4 text-2xl font-bold">Flashcards</h1>
         <p className="text-gray-500">
-          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+          <Link className="underline" href="/welcome">Set up your AI tutor to generate your first curriculum</Link>.
         </p>
       </main>
     );
