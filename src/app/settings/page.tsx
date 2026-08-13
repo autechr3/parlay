@@ -31,6 +31,12 @@ export default async function SettingsPage() {
         <label className={field}>Reviews per day
           <input type="number" name="daily_review_limit" min={0} max={1000}
             defaultValue={p.daily_review_limit} className={input} /></label>
+        <label className={field}>Farsi script size (100–200%)
+          <input type="number" name="fa_scale" min={100} max={200} step={5}
+            defaultValue={p.fa_scale} className={input} /></label>
+        <p className="-mt-2 text-sm text-gray-500">
+          Current size: <span dir="rtl" lang="fa" className="font-fa">خواهش می‌کنم</span>
+          {" "}— save to apply everywhere.</p>
         <button className="rounded bg-black p-3 text-white">Save</button>
       </form>
       <TokenManager tokens={tokens ?? []} />
