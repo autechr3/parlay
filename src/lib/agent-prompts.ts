@@ -67,7 +67,7 @@ Field notes:
 // Language-specific writing rules layered on top of SCHEMA_DOC. Only Persian has rules worth
 // stating today (the only configured language) — emitted purely by languageCode so this stays
 // correct if/when a second language is registered without any of these prompts changing shape.
-function buildLanguageRules(languageCode: string): string {
+export function buildLanguageRules(languageCode: string): string {
   if (languageCode !== "fa") return "";
   return `
 Language rules (Persian):
