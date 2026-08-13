@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_EMAIL, TEST_PASSWORD } from "./constants";
+import { TEST_EMAIL, TEST_PASSWORD, ONBOARD_TEST_EMAIL, ONBOARD_TEST_PASSWORD } from "./constants";
 
 // Playwright's webServer doesn't load .env.local for this Node process, so parse it
 // the same way scripts/seed-lessons.ts does.
@@ -67,4 +67,42 @@ export default async function globalSetup() {
   if (reviewLogErr) throw new Error(`failed to clear review_log: ${reviewLogErr.message}`);
   const { error: vocabReviewsErr } = await supabase.from("vocab_reviews").delete().eq("user_id", userId);
   if (vocabReviewsErr) throw new Error(`failed to clear vocab_reviews: ${vocabReviewsErr.message}`);
+
+  // e2e/onboarding.spec.ts needs a second user that is always "fresh": no curriculum, no
+  // onboarded_at stamp. Deleting this user in a teardown would work too, but resetting it here
+  // (same idempotent create-then-reset shape as the block above) means a run that crashes
+  // mid-spec still leaves the fixture usable on the next run, and it keeps all fixture setup in
+  // one place instead of splitting it between global-setup and the spec file.
+  const { error: createOnboardErr } = await supabase.auth.admin.createUser({
+    email: ONBOARD_TEST_EMAIL,
+    password: ONBOARD_TEST_PASSWORD,
+    email_confirm: true,
+  });
+  if (createOnboardErr && !/already.*registered|already.*exists/i.test(createOnboardErr.message)) {
+    throw new Error(`failed to create onboarding test user: ${createOnboardErr.message}`);
+  }
+
+  const { data: onboardProfile, error: onboardProfileErr } = await supabase
+    .from("profiles").select("id").eq("email", ONBOARD_TEST_EMAIL).single();
+  if (onboardProfileErr || !onboardProfile) {
+    throw new Error(`no profile for ${ONBOARD_TEST_EMAIL} after ensuring auth user: ${onboardProfileErr?.message}`);
+  }
+  const onboardUserId = onboardProfile.id as string;
+
+  const { error: onboardCurriculumsErr } = await supabase.from("curriculums")
+    .delete().eq("owner_id", onboardUserId);
+  if (onboardCurriculumsErr) {
+    throw new Error(`failed to clear curriculums for onboarding test user: ${onboardCurriculumsErr.message}`);
+  }
+  const { error: onboardTokensErr } = await supabase.from("api_tokens")
+    .delete().eq("user_id", onboardUserId);
+  if (onboardTokensErr) {
+    throw new Error(`failed to clear api_tokens for onboarding test user: ${onboardTokensErr.message}`);
+  }
+  const { error: onboardResetErr } = await supabase.from("profiles")
+    .update({ onboarded_at: null, active_curriculum_id: null })
+    .eq("id", onboardUserId);
+  if (onboardResetErr) {
+    throw new Error(`failed to reset profile for onboarding test user: ${onboardResetErr.message}`);
+  }
 }
