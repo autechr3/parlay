@@ -20,6 +20,18 @@ function PromptSection({ heading, when, prompt, extra }: {
         <summary className="cursor-pointer text-sm underline">Show prompt</summary>
         <pre className="whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs">{prompt}</pre>
       </details>
+    </section>
+  );
+}
+
+function FallbackPromptSection({ heading, prompt }: { heading: string; prompt: string }) {
+  return (
+    <section className="rounded border p-4">
+      <h3 className="font-semibold">{heading}</h3>
+      <details>
+        <summary className="cursor-pointer text-sm underline">Show prompt</summary>
+        <pre className="whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs">{prompt}</pre>
+      </details>
       <div className="mt-2"><CopyPromptButton prompt={prompt} /></div>
     </section>
   );
@@ -43,13 +55,25 @@ export default async function PromptsPage({
       <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Prompts</h1>
         <p className="text-gray-500">
-          <Link className="underline" href="/curriculums">Import a curriculum to get started</Link>.
+          Ask your connected tutor to build your first curriculum, or{" "}
+          <Link className="underline" href="/curriculums">import one to get started</Link>.
         </p>
         <PromptSection
           heading="Create a curriculum"
-          when="Use this first — no curriculum yet. Paste the result into /import."
+          when="Use this first — no curriculum yet. Your tutor imports the result for you."
           prompt={buildCreateCoursePrompt()}
         />
+        <details className="rounded border p-4">
+          <summary className="cursor-pointer font-semibold">My AI tool can&apos;t use MCP tools</summary>
+          <p className="mb-2 mt-2 text-sm text-gray-500">
+            Paste the prompt below into your AI tool, then paste its JSON reply into{" "}
+            <Link href="/curriculums/import" className="underline">Import</Link>.
+          </p>
+          <FallbackPromptSection
+            heading="Create a curriculum"
+            prompt={buildCreateCoursePrompt(false)}
+          />
+        </details>
       </main>
     );
   }
@@ -99,9 +123,9 @@ export default async function PromptsPage({
     <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-bold">Prompts</h1>
       <p className="text-sm text-gray-600">
-        Copy-paste prompts for your AI agent, generated from{" "}
-        <span className="font-medium">{state.curriculumName}</span>&apos;s current state. Paste the
-        agent&apos;s JSON reply into <Link href="/curriculums/import" className="underline">Import</Link>.
+        Ask your connected tutor to grow{" "}
+        <span className="font-medium">{state.curriculumName}</span> — it writes lessons, exercises,
+        and vocabulary straight into your account through its tools. No copying or pasting needed.
       </p>
 
       <PromptSection
@@ -138,6 +162,34 @@ export default async function PromptsPage({
         when="Grow the word list for existing lessons without adding new ones."
         prompt={buildAddVocabPrompt(state)}
       />
+
+      <details className="rounded border p-4">
+        <summary className="cursor-pointer font-semibold">My AI tool can&apos;t use MCP tools</summary>
+        <p className="mb-2 mt-2 text-sm text-gray-500">
+          Paste a prompt below into your AI tool, then paste its JSON reply into{" "}
+          <Link href="/curriculums/import" className="underline">Import</Link>.
+        </p>
+        <div className="flex flex-col gap-4">
+          <FallbackPromptSection
+            heading="Create a curriculum"
+            prompt={buildCreateCoursePrompt(false)}
+          />
+          <FallbackPromptSection
+            heading="Generate the next lessons"
+            prompt={buildNextLessonsPrompt(state, count, false)}
+          />
+          {currentLesson && (
+            <FallbackPromptSection
+              heading={`Generate exercises for lesson ${currentLesson.number}`}
+              prompt={buildExercisesPrompt(state, currentLesson.number, false)}
+            />
+          )}
+          <FallbackPromptSection
+            heading="Add vocabulary"
+            prompt={buildAddVocabPrompt(state, false)}
+          />
+        </div>
+      </details>
     </main>
   );
 }

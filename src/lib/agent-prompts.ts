@@ -92,27 +92,33 @@ export type CurriculumState = {
   lessons: { number: number; title: string; grammar: string[]; vocab: string[] }[];
 };
 
-const CLOSING = "Output ONLY the JSON object, no prose, no markdown fences.";
+const DISCONNECTED_CLOSING = "Output ONLY the JSON object, no prose, no markdown fences.";
+const CONNECTED_CLOSING =
+  "Import the result yourself with the import_content_package tool, then confirm to the learner what was imported (curriculum, lessons, vocab counts). Do not show them raw JSON.";
 
-export function buildCreateCoursePrompt(): string {
+function closing(connected: boolean): string {
+  return connected ? CONNECTED_CLOSING : DISCONNECTED_CLOSING;
+}
+
+export function buildCreateCoursePrompt(connected: boolean = true): string {
   return `You are designing a complete beginner Farsi curriculum as a content package.
 Design 2 units of 10 lessons each (numbers 1-20), each lesson with 12-18 vocab items
 (verbs must include morphology.present_stem and morphology.past_stem) and 8-12 exercises mixing all four types.
 ${schemaBlock("fa")}
-${CLOSING}`;
+${closing(connected)}`;
 }
 
-export function buildNextLessonsPrompt(s: CurriculumState, count: number): string {
+export function buildNextLessonsPrompt(s: CurriculumState, count: number, connected: boolean = true): string {
   return `You are extending the ${s.languageName} curriculum "${s.curriculumName}". It currently ends at lesson ${s.maxLesson}.
 Generate lessons ${s.maxLesson + 1} through ${s.maxLesson + count} (start at lesson ${s.maxLesson + 1}).
 Grammar already covered (build on it, do not re-teach): ${s.grammarCovered.join(", ")}.
 Vocabulary already taught (do NOT duplicate): ${s.recentVocab.join("، ")}.
 Each lesson: 12-18 new vocab items (verbs with morphology stems) and 8-12 exercises mixing all four types.
 ${schemaBlock(s.languageCode)}
-${CLOSING}`;
+${closing(connected)}`;
 }
 
-export function buildExercisesPrompt(s: CurriculumState, lessonNumber: number): string {
+export function buildExercisesPrompt(s: CurriculumState, lessonNumber: number, connected: boolean = true): string {
   const l = s.lessons.find((x) => x.number === lessonNumber);
   if (!l) throw new Error(`no lesson ${lessonNumber}`);
   return `Generate exercises for lesson ${l.number} "${l.title}" of the ${s.languageName} curriculum "${s.curriculumName}".
@@ -120,14 +126,14 @@ Grammar points of this lesson: ${l.grammar.join(", ")}.
 Vocabulary of this lesson (use these words): ${l.vocab.join("، ")}.
 Return a package whose "lessons" array contains ONLY: {"number": ${l.number}, "title": "${l.title}", "exercises": [10-14 items mixing to_target, from_target, cloze, scramble]}.
 ${schemaBlock(s.languageCode)}
-${CLOSING}`;
+${closing(connected)}`;
 }
 
-export function buildAddVocabPrompt(s: CurriculumState): string {
+export function buildAddVocabPrompt(s: CurriculumState, connected: boolean = true): string {
   return `Add supplementary vocabulary to the ${s.languageName} curriculum "${s.curriculumName}".
 Existing vocabulary sample (do NOT duplicate): ${s.recentVocab.join("، ")}.
 Return a package whose lessons contain only "number", "title" and "vocab" arrays,
 attaching new words to the existing lessons they fit best (lessons 1-${s.maxLesson}).
 ${schemaBlock(s.languageCode)}
-${CLOSING}`;
+${closing(connected)}`;
 }

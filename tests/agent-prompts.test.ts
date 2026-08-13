@@ -44,6 +44,10 @@ const SCHEMA_DOC_EXAMPLE = {
   ],
 };
 
+const CONNECTED_CLOSING =
+  "Import the result yourself with the import_content_package tool, then confirm to the learner what was imported (curriculum, lessons, vocab counts). Do not show them raw JSON.";
+const DISCONNECTED_CLOSING = "Output ONLY the JSON object, no prose, no markdown fences.";
+
 describe("agent prompts", () => {
   it("every prompt embeds format id, v2 schema and output rule", () => {
     for (const p of [buildCreateCoursePrompt(), buildNextLessonsPrompt(state, 5),
@@ -53,7 +57,22 @@ describe("agent prompts", () => {
       expect(p).toContain('"term"');
       expect(p).toContain('"language": "fa"');
       expect(p).not.toContain('"farsi":');
-      expect(p).toContain("Output ONLY the JSON");
+    }
+  });
+
+  it("defaults to connected mode: emits the connected closing, not the JSON-only closing", () => {
+    for (const p of [buildCreateCoursePrompt(), buildNextLessonsPrompt(state, 5),
+      buildExercisesPrompt(state, 4), buildAddVocabPrompt(state)]) {
+      expect(p).toContain(CONNECTED_CLOSING);
+      expect(p).not.toContain(DISCONNECTED_CLOSING);
+    }
+  });
+
+  it("connected=false emits the JSON-only closing, not the connected closing", () => {
+    for (const p of [buildCreateCoursePrompt(false), buildNextLessonsPrompt(state, 5, false),
+      buildExercisesPrompt(state, 4, false), buildAddVocabPrompt(state, false)]) {
+      expect(p).toContain(DISCONNECTED_CLOSING);
+      expect(p).not.toContain(CONNECTED_CLOSING);
     }
   });
 
