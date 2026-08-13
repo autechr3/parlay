@@ -67,15 +67,29 @@ async function ownedCurriculumIds(admin: Admin, userId: string): Promise<string[
 
 // Resolves the caller's active curriculum (name + language code), for embedding into
 // get_study_state and for picking the right normalizer in searchVocab. Returns null when
-// the profile has no active_curriculum_id (or it doesn't resolve to a row).
+// the profile has no active_curriculum_id, or it doesn't resolve to a row the caller owns.
+//
+// active_curriculum_id is user-mutable via PostgREST and its RLS policy has no FK-target
+// ownership check (a user can PATCH it to any curriculum UUID, not just one they own); the
+// admin client also bypasses RLS entirely. So this can't be a plain lookup — it must
+// re-verify ownership itself, exactly like addVocab's active-curriculum check, or a foreign
+// curriculum's name/language could leak into get_study_state and steer searchVocab's
+// normalizer. Two explicit queries (not a profiles->curriculums embed): PostgREST rejects an
+// embed here as ambiguous anyway, since two FKs connect profiles and curriculums
+// (curriculums.owner_id -> profiles.id and profiles.active_curriculum_id -> curriculums.id).
 async function activeCurriculum(
   admin: Admin, userId: string,
 ): Promise<{ name: string; language: string } | null> {
-  const { data, error } = await admin.from("profiles")
-    .select("curriculums(name, language_code)").eq("id", userId).single();
-  if (error) throw error;
-  const row = data?.curriculums as unknown as { name: string; language_code: string } | null;
-  return row ? { name: row.name, language: row.language_code } : null;
+  const { data: profile, error: pErr } = await admin.from("profiles")
+    .select("active_curriculum_id").eq("id", userId).single();
+  if (pErr) throw pErr;
+  if (!profile?.active_curriculum_id) return null;
+
+  const { data: curriculum, error: cErr } = await admin.from("curriculums")
+    .select("name, language_code")
+    .eq("id", profile.active_curriculum_id).eq("owner_id", userId).maybeSingle();
+  if (cErr) throw cErr;
+  return curriculum ? { name: curriculum.name as string, language: curriculum.language_code as string } : null;
 }
 
 export async function getStudyState(userId: string): Promise<StudyState> {
