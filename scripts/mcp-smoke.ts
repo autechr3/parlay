@@ -49,6 +49,7 @@ const EXPECTED_TOOLS = [
   "import_content_package",
   "get_review_queue",
   "grade_card",
+  "get_tutor_instructions",
 ].sort();
 
 function fail(msg: string): never {
@@ -351,6 +352,24 @@ async function main() {
     if (rlErr || !rlRows?.length) fail(`review_log row not found after grade_card: ${rlErr?.message}`);
     console.log(`grade_card OK (review_log row ${rlRows[0].id} verified)`);
 
+    // --- get_tutor_instructions (default language: fa) ---
+    const instructions = await callTool(token, "get_tutor_instructions");
+    assert(typeof instructions === "string", `get_tutor_instructions did not return a string: ${JSON.stringify(instructions)}`);
+    const instructionsText = instructions as string;
+    assert(
+      instructionsText.includes("import_content_package"),
+      `get_tutor_instructions missing "import_content_package": ${instructionsText.slice(0, 200)}`,
+    );
+    assert(
+      instructionsText.includes("ZWNJ"),
+      `get_tutor_instructions missing "ZWNJ" (fa language rules): ${instructionsText.slice(0, 200)}`,
+    );
+    assert(
+      instructionsText.includes("no curriculum yet"),
+      `get_tutor_instructions missing "no curriculum yet": ${instructionsText.slice(0, 200)}`,
+    );
+    console.log("get_tutor_instructions OK (import_content_package, ZWNJ, no curriculum yet all present)");
+
     // Mark that all checks passed; cleanup will be exception-safe
     allChecksPassed = true;
   } catch (e) {
@@ -381,7 +400,7 @@ async function main() {
 
       // Print success line only if all checks passed AND cleanup succeeded
       if (allChecksPassed && !cleanupErr && (process.exitCode === 0 || process.exitCode === undefined)) {
-        console.log("MCP SMOKE OK (11 tools, state/log/queue/grade verified, cleaned up)");
+        console.log("MCP SMOKE OK (12 tools, state/log/queue/grade/tutor-instructions verified, cleaned up)");
       }
     }
   }

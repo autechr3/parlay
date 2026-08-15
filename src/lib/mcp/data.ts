@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLanguage } from "@/lib/languages";
 import { importContentPackage, deriveVocabScript, type ContentPackage } from "@/lib/content-package";
+import { buildTutorSkill, buildFirstCurriculumGuidance } from "@/lib/tutor-skill";
 import { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
 
 // Re-exported so any caller that only needs the data layer's surface can import
@@ -10,6 +11,11 @@ import { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers
 export { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
 
 type Admin = ReturnType<typeof createAdminClient>;
+
+// Same env var and fallback as route.ts's SITE const — duplicated rather than threaded
+// through getTutorInstructions's params because every other MCP data-layer function takes
+// only (userId, ...domain args), and this one follows that same call shape from route.ts.
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 const DIRECTIONS = ["fa_to_en", "en_to_fa", "stem", "audio"] as const;
 export type GradeDirection = (typeof DIRECTIONS)[number];
@@ -378,4 +384,27 @@ export async function gradeCard(
   });
   if (error) throw error;
   return data;
+}
+
+// userId is accepted (and unused) only to keep this function's call shape consistent with
+// every other MCP data-layer function, which route.ts invokes as (userId, ...args) — the
+// response itself is language-scoped, not user-scoped: it's the same tutor-skill text for
+// every caller who asks for a given language, with no per-user data read or written.
+export async function getTutorInstructions(userId: string, language: string): Promise<string> {
+  const admin = createAdminClient();
+  const { data: languages, error } = await admin.from("languages").select("code, name");
+  if (error) throw error;
+  const rows = languages ?? [];
+  const row = rows.find((l) => l.code === language);
+  if (!row) {
+    const codes = rows.map((l) => l.code as string);
+    throw new Error(`unsupported language "${language}" — supported: ${codes.join(", ")}`);
+  }
+  const skill = buildTutorSkill({
+    languageCode: language,
+    languageName: row.name as string,
+    siteUrl: SITE,
+    flavor: "gpt-instructions",
+  });
+  return skill + "\n" + buildFirstCurriculumGuidance(row.name as string);
 }

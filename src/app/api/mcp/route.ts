@@ -15,6 +15,7 @@ import {
   importPackage,
   getReviewQueue,
   gradeCard,
+  getTutorInstructions,
 } from "@/lib/mcp/data";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -206,6 +207,16 @@ function registerTools(server: McpServer, userId: string) {
     },
     ({ vocab_id, grade, direction, ms_taken }) =>
       toolResult(() => gradeCard(userId, vocab_id, grade, direction, ms_taken)),
+  );
+
+  server.registerTool(
+    "get_tutor_instructions",
+    {
+      description:
+        "Call this before tutoring: returns the tutoring workflow, content-authoring rules, and first-session guidance for this learner's target language. New connections should call this first.",
+      inputSchema: z.object({ language: z.string().min(1).default("fa") }),
+    },
+    ({ language }) => toolResult(() => getTutorInstructions(userId, language)),
   );
 }
 
