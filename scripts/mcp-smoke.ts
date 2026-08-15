@@ -163,7 +163,11 @@ async function rpcNotify(token: string, method: string, params?: unknown): Promi
   await sendMcp(token, { jsonrpc: "2.0", method, params: params ?? {} }, false);
 }
 
-async function callTool(token: string, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+async function callToolRaw(
+  token: string,
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<string> {
   const result = (await rpcRequest(token, "tools/call", { name, arguments: args })) as {
     content?: { text?: string }[];
     isError?: boolean;
@@ -171,6 +175,11 @@ async function callTool(token: string, name: string, args: Record<string, unknow
   const text = result?.content?.[0]?.text;
   assert(typeof text === "string", `${name} tool result missing content[0].text: ${JSON.stringify(result)}`);
   if (result.isError) fail(`${name} returned isError: ${text}`);
+  return text;
+}
+
+async function callTool(token: string, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+  const text = await callToolRaw(token, name, args);
   return JSON.parse(text);
 }
 
@@ -353,9 +362,18 @@ async function main() {
     console.log(`grade_card OK (review_log row ${rlRows[0].id} verified)`);
 
     // --- get_tutor_instructions (default language: fa) ---
-    const instructions = await callTool(token, "get_tutor_instructions");
-    assert(typeof instructions === "string", `get_tutor_instructions did not return a string: ${JSON.stringify(instructions)}`);
-    const instructionsText = instructions as string;
+    // Read the RAW wire text (no JSON.parse) — this tool returns plain instruction
+    // prose, not a JSON value, so the raw bytes on the wire must be the unquoted,
+    // un-escaped string itself (see toolResult's string branch in route.ts).
+    const instructionsText = await callToolRaw(token, "get_tutor_instructions");
+    assert(
+      instructionsText.startsWith("You are a "),
+      `get_tutor_instructions raw text does not start with unquoted "You are a ": ${instructionsText.slice(0, 50)}`,
+    );
+    assert(
+      instructionsText.includes("\n# Role"),
+      `get_tutor_instructions raw text missing a real newline before "# Role" (looks JSON-escaped): ${instructionsText.slice(0, 200)}`,
+    );
     assert(
       instructionsText.includes("import_content_package"),
       `get_tutor_instructions missing "import_content_package": ${instructionsText.slice(0, 200)}`,
@@ -368,7 +386,7 @@ async function main() {
       instructionsText.includes("no curriculum yet"),
       `get_tutor_instructions missing "no curriculum yet": ${instructionsText.slice(0, 200)}`,
     );
-    console.log("get_tutor_instructions OK (import_content_package, ZWNJ, no curriculum yet all present)");
+    console.log("get_tutor_instructions OK (raw text unescaped, import_content_package, ZWNJ, no curriculum yet all present)");
 
     // Mark that all checks passed; cleanup will be exception-safe
     allChecksPassed = true;

@@ -27,7 +27,12 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 async function toolResult(fn: () => Promise<unknown>) {
   try {
     const out = await fn();
-    return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 2) }] };
+    // String results (get_tutor_instructions) are instruction text delivered
+    // verbatim to the agent — JSON-stringifying it would quote/escape the
+    // newlines and read as a blob instead of prose, so only non-string
+    // results get the JSON.stringify treatment.
+    const text = typeof out === "string" ? out : JSON.stringify(out, null, 2);
+    return { content: [{ type: "text" as const, text }] };
   } catch (e) {
     return {
       content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],

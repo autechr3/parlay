@@ -161,7 +161,7 @@ export function buildBootstrapPrompt(p: {
    - claude.ai or Claude Desktop: go to Settings → Connectors → Add custom connector, and enter this URL: ${p.siteUrl}/api/mcp — no client ID or secret is needed.
    - Claude Code: run this yourself: claude mcp add --transport http farsi-tracker ${p.siteUrl}/api/mcp
    - ChatGPT: open its connector or developer-mode settings and add ${p.siteUrl}/api/mcp as a connector (this flow varies by ChatGPT version — do your best).
-   Wait for me to confirm the connection is active before you go any further.
+   If you had to help me connect: wait for me to confirm before continuing. If the tools still don't appear after connecting, ask me to start a new conversation and paste this prompt again.
 
 3. Once connected, verify it by calling get_study_state.
 
@@ -176,7 +176,7 @@ export function buildBootstrapPrompt(p: {
 export function buildFirstCurriculumGuidance(languageName: string): string {
   return `# First curriculum
 
-If the learner has no curriculum yet: before doing anything else, interview them briefly — ask about their pace (relaxed vs. intensive), how much time they have per week, their interests or goals in learning ${languageName} (travel, family, media, work), and whether they want the script, transliteration, or both. Keep it to a few quick questions, not a form.
+If the learner has no curriculum yet: after get_study_state, before teaching anything, interview them briefly — ask about their pace (relaxed vs. intensive), how much time they have per week, their interests or goals in learning ${languageName} (travel, family, media, work), and whether they want the script, transliteration, or both. Keep it to a few quick questions, not a form.
 
-Then generate a starter curriculum from what they told you and import it yourself by calling import_content_package — never show the learner the raw JSON, they should only ever see the result. Once the import succeeds, confirm back to them what was actually created, reading the curriculum name, lesson count, and vocab count from the tool's result rather than restating what you intended to send. Then suggest they start with lesson 1.`;
+Then generate a starter curriculum from what they told you and import it yourself by calling import_content_package — never show the learner the raw JSON, they should only ever see the result. Once the import succeeds, confirm back to them what was actually created, reading the lesson count and vocab count from the tool's result rather than restating what you intended to send. Then suggest they start with lesson 1.`;
 }
