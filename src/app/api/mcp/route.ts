@@ -27,11 +27,26 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 async function toolResult(fn: () => Promise<unknown>) {
   try {
     const out = await fn();
-    // String results (get_tutor_instructions) are instruction text delivered
-    // verbatim to the agent — JSON-stringifying it would quote/escape the
-    // newlines and read as a blob instead of prose, so only non-string
-    // results get the JSON.stringify treatment.
-    const text = typeof out === "string" ? out : JSON.stringify(out, null, 2);
+    return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 2) }] };
+  } catch (e) {
+    return {
+      content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
+      isError: true,
+    };
+  }
+}
+
+// For tools whose data-layer function returns freeform instruction PROSE, never
+// data (currently only get_tutor_instructions): the string goes on the wire
+// untouched, no JSON.stringify. Several other tools also happen to return a
+// bare string at runtime (log_practice_session and add_vocab both resolve to a
+// row id), but those are DATA — an opaque id the caller JSON.parses like every
+// other tool result — so they must keep using toolResult above. This wrapper is
+// selected per tool by identity/registration, not by the runtime type of the
+// value, to avoid re-introducing that mix-up.
+async function toolResultVerbatim(fn: () => Promise<string>) {
+  try {
+    const text = await fn();
     return { content: [{ type: "text" as const, text }] };
   } catch (e) {
     return {
@@ -221,7 +236,7 @@ function registerTools(server: McpServer, userId: string) {
         "Call this before tutoring: returns the tutoring workflow, content-authoring rules, and first-session guidance for this learner's target language. New connections should call this first.",
       inputSchema: z.object({ language: z.string().min(1).default("fa") }),
     },
-    ({ language }) => toolResult(() => getTutorInstructions(userId, language)),
+    ({ language }) => toolResultVerbatim(() => getTutorInstructions(userId, language)),
   );
 }
 
