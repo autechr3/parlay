@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildTutorSkill, tutorSkillFilename, type TutorSkillParams } from "../src/lib/tutor-skill";
+import {
+  buildTutorSkill,
+  tutorSkillFilename,
+  buildBootstrapPrompt,
+  buildFirstCurriculumGuidance,
+  type TutorSkillParams,
+} from "../src/lib/tutor-skill";
 
 const TOOL_NAMES = [
   "get_study_state",
@@ -139,6 +145,81 @@ describe("tutor-skill language rules", () => {
     });
     expect(skill).not.toContain("Language rules (Persian)");
     expect(skill).not.toMatch(/ZWNJ|U\+200C/);
+  });
+});
+
+describe("buildBootstrapPrompt", () => {
+  const p = { languageCode: "fa", languageName: "Persian", siteUrl: "http://localhost:3000" };
+
+  it("covers all three platform connect paths with exact strings", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt).toContain("Settings → Connectors");
+    expect(prompt).toContain("claude mcp add --transport http farsi-tracker");
+    expect(prompt).toContain("ChatGPT");
+  });
+
+  it("interpolates the passed siteUrl into the connector URL, never a prod URL", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt).toContain("http://localhost:3000/api/mcp");
+    expect(prompt).not.toMatch(/vercel\.app/);
+  });
+
+  it("names both tools the agent must call", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt).toContain("get_study_state");
+    expect(prompt).toContain("get_tutor_instructions");
+  });
+
+  it("interpolates the language code for get_tutor_instructions", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt).toContain("fa");
+  });
+
+  it("stays short — at most 30 lines", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt.split("\n").length).toBeLessThanOrEqual(30);
+  });
+
+  it("contains no JSON or schema content — no braces at all", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt).not.toContain("{");
+    expect(prompt).not.toContain("}");
+  });
+
+  it("tells the agent to wait for the user to confirm before verifying", () => {
+    const prompt = buildBootstrapPrompt(p);
+    expect(prompt.toLowerCase()).toMatch(/wait[\s\S]*confirm/);
+  });
+});
+
+describe("buildFirstCurriculumGuidance", () => {
+  it("mentions import_content_package as the authoring path", () => {
+    const guidance = buildFirstCurriculumGuidance("Persian");
+    expect(guidance).toContain("import_content_package");
+  });
+
+  it("covers the interview topics: pace, weekly time, interests, script-vs-transliteration", () => {
+    const guidance = buildFirstCurriculumGuidance("Persian");
+    expect(guidance.toLowerCase()).toMatch(/pace/);
+    expect(guidance.toLowerCase()).toMatch(/weekly time|time per week|how much time/);
+    expect(guidance.toLowerCase()).toMatch(/interests?/);
+    expect(guidance.toLowerCase()).toMatch(/script|transliteration/);
+  });
+
+  it("uses the conditional 'no curriculum yet' framing", () => {
+    const guidance = buildFirstCurriculumGuidance("Persian");
+    expect(guidance).toMatch(/no curriculum yet/i);
+  });
+
+  it("never instructs the agent to output raw JSON", () => {
+    const guidance = buildFirstCurriculumGuidance("Persian");
+    expect(guidance).not.toContain("Output ONLY the JSON");
+    expect(guidance.toLowerCase()).not.toMatch(/output.*only.*json/);
+  });
+
+  it("interpolates the language name", () => {
+    const guidance = buildFirstCurriculumGuidance("Persian");
+    expect(guidance).toContain("Persian");
   });
 });
 

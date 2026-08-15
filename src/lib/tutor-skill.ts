@@ -141,3 +141,42 @@ export function buildTutorSkill(p: TutorSkillParams): string {
     p.flavor === "claude-skill" ? frontmatter(p.languageName) : gptOpeningLine(p.languageName);
   return `${wrapper}\n\n${body}\n`;
 }
+
+// The one-paste bootstrap: a user drops this straight into whatever AI app they're using —
+// claude.ai, Claude Desktop, Claude Code, ChatGPT, or anything else — with no idea which
+// tools that app supports yet. It must work standing alone, before any MCP connection
+// exists, so it stays plain imperative prose: no JSON, no schema, nothing the target app
+// might choke on rendering. Everything past step 3 is delegated to get_tutor_instructions
+// (server-side, tool-fetched) rather than inlined here, which is what keeps this short.
+export function buildBootstrapPrompt(p: {
+  languageCode: string;
+  languageName: string;
+  siteUrl: string;
+}): string {
+  return `You are helping me set up a ${p.languageName} tutor in the Farsi Progress Tracker app. Do this now:
+
+1. Figure out which AI app you're running in right now (claude.ai, Claude Desktop, Claude Code, ChatGPT, or something else).
+
+2. Check whether you already have farsi-tracker MCP tools available. If not, connect them yourself using the path for THIS app — don't just describe it, walk me through actually doing it:
+   - claude.ai or Claude Desktop: go to Settings → Connectors → Add custom connector, and enter this URL: ${p.siteUrl}/api/mcp — no client ID or secret is needed.
+   - Claude Code: run this yourself: claude mcp add --transport http farsi-tracker ${p.siteUrl}/api/mcp
+   - ChatGPT: open its connector or developer-mode settings and add ${p.siteUrl}/api/mcp as a connector (this flow varies by ChatGPT version — do your best).
+   Wait for me to confirm the connection is active before you go any further.
+
+3. Once connected, verify it by calling get_study_state.
+
+4. Call get_tutor_instructions with language ${p.languageCode} and follow whatever it returns from that point on — that becomes your playbook for tutoring me and building my first curriculum.`;
+}
+
+// Appended (server-side, by the get_tutor_instructions tool, NOT baked into buildTutorSkill)
+// after the tutor skill body so a freshly-connected agent knows what to do on session one,
+// when the learner's account has no curriculum at all yet. Phrased conditionally because the
+// same instructions text is served every time — an agent whose learner already has a
+// curriculum just skips this section and moves straight to # Session start.
+export function buildFirstCurriculumGuidance(languageName: string): string {
+  return `# First curriculum
+
+If the learner has no curriculum yet: before doing anything else, interview them briefly — ask about their pace (relaxed vs. intensive), how much time they have per week, their interests or goals in learning ${languageName} (travel, family, media, work), and whether they want the script, transliteration, or both. Keep it to a few quick questions, not a form.
+
+Then generate a starter curriculum from what they told you and import it yourself by calling import_content_package — never show the learner the raw JSON, they should only ever see the result. Once the import succeeds, confirm back to them what was actually created, reading the curriculum name, lesson count, and vocab count from the tool's result rather than restating what you intended to send. Then suggest they start with lesson 1.`;
+}
