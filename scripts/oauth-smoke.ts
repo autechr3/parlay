@@ -58,6 +58,7 @@ const EXPECTED_TOOLS = [
   "import_content_package",
   "get_review_queue",
   "grade_card",
+  "get_tutor_instructions",
 ].sort();
 
 function fail(msg: string): never {

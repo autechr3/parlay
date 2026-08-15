@@ -16,10 +16,22 @@ test("fresh user is routed through the wizard, skip stamps onboarded_at", async 
   const farsiCard = page.getByRole("button", { name: /فارسی/ });
   await expect(farsiCard).toBeVisible();
 
-  // Selecting the language advances straight to step 2 (StepSkill) — no separate "Next" click.
+  // Selecting the language advances straight to step 2 (StepConnect) — no separate "Next" click.
   await farsiCard.click();
-  await expect(page.getByRole("heading", { name: "Install your tutor skill" })).toBeVisible();
-  await expect(page.locator("pre")).toContainText("import_content_package");
+  await expect(
+    page.getByRole("heading", { name: "Copy one prompt into your AI — it does the rest." }),
+  ).toBeVisible();
+
+  // The one-paste bootstrap prompt names get_tutor_instructions (it's what teaches the AI to
+  // become the tutor and run the first-curriculum import) — it must be visible up front, not
+  // hidden behind the manual fallback. Scope to the visible <pre> — the collapsed "Set up
+  // manually instead" <details> below also contains a <pre> (the manual tutor skill), still
+  // present in the DOM but hidden until expanded.
+  await expect(page.locator("pre:visible")).toContainText("get_tutor_instructions");
+
+  // The manual/advanced fallback (skill tabs + per-tool connector steps) is still reachable,
+  // collapsed by default behind a <details>.
+  await expect(page.getByText("Set up manually instead")).toBeVisible();
 
   // Skip setup (header button) stamps onboarded_at and lands on the empty-library CTA.
   await page.getByRole("button", { name: "Skip setup" }).click();
