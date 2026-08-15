@@ -7,15 +7,14 @@ import { useRouter } from "next/navigation";
 import { completeOnboarding } from "../../app/welcome/actions";
 import type { WelcomeStatus } from "../../app/welcome/status/build";
 import { StepLanguage, type WizardLanguage } from "./StepLanguage";
-import { StepSkill, type AiTool } from "./StepSkill";
+import { type AiTool } from "./StepSkill";
 import { StepConnect } from "./StepConnect";
 import { StepCurriculum } from "./StepCurriculum";
 
 const STEPS = [
   { n: 1, label: "Choose language" },
-  { n: 2, label: "Install skill" },
-  { n: 3, label: "Connect" },
-  { n: 4, label: "First curriculum" },
+  { n: 2, label: "Connect your AI" },
+  { n: 3, label: "First curriculum" },
 ] as const;
 
 export function Wizard({
@@ -35,14 +34,14 @@ export function Wizard({
 
   const selectedLanguage = languages.find((l) => l.code === languageCode) ?? languages[0];
 
-  // Poll /welcome/status while the learner is on steps 3-4 — the only steps whose progress
+  // Poll /welcome/status while the learner is on steps 2-3 — the only steps whose progress
   // happens outside this app, inside the learner's AI tool. Fetch immediately on entering either
   // step so the live strip doesn't wait out the first tick, then every 4s. Once a curriculum has
   // arrived there is nothing left to detect, so the effect returns early instead of arming a new
   // interval — the tick that flips curriculumCount to >0 cancels its own interval (via the
   // cleanup below) and never re-arms one, stopping polling entirely.
   useEffect(() => {
-    if (step !== 3 && step !== 4) return;
+    if (step !== 2 && step !== 3) return;
     if (status.curriculumCount > 0) return;
 
     let cancelled = false;
@@ -75,7 +74,7 @@ export function Wizard({
   }
 
   function next() {
-    setStep((s) => Math.min(4, s + 1));
+    setStep((s) => Math.min(3, s + 1));
   }
 
   async function skip() {
@@ -103,8 +102,8 @@ export function Wizard({
 
   // Guards the curriculum-arrival completeOnboarding call. This ref lives here (not inside
   // StepCurriculum) specifically because Wizard stays mounted for the entire wizard session while
-  // StepCurriculum unmounts every time the learner steps off step 4 — a ref inside StepCurriculum
-  // would reset on every Back(3)→Next(4) remount and could re-fire. Guaranteed: fires at most once
+  // StepCurriculum unmounts every time the learner steps off step 3 — a ref inside StepCurriculum
+  // would reset on every Back(2)→Next(3) remount and could re-fire. Guaranteed: fires at most once
   // per Wizard mount. completeOnboarding's own server-side idempotency
   // (`.is("onboarded_at", null)`) covers the remaining case of multiple Wizard mounts (e.g. a page
   // reload after the curriculum already arrived).
@@ -124,8 +123,8 @@ export function Wizard({
   }, []);
 
   function isDone(n: number): boolean {
-    if (n === 3) return status.hasToken;
-    if (n === 4) return status.curriculumCount > 0;
+    if (n === 2) return status.hasToken;
+    if (n === 3) return status.curriculumCount > 0;
     return step > n;
   }
 
@@ -160,18 +159,16 @@ export function Wizard({
 
       {step === 1 && <StepLanguage languages={languages} value={languageCode} onSelect={selectLanguage} />}
       {step === 2 && selectedLanguage && (
-        <StepSkill
+        <StepConnect
           languageCode={selectedLanguage.code}
           languageName={selectedLanguage.name}
-          siteUrl={siteUrl}
           aiTool={aiTool}
           onAiToolChange={setAiTool}
+          siteUrl={siteUrl}
+          status={status}
         />
       )}
       {step === 3 && (
-        <StepConnect aiTool={aiTool} onAiToolChange={setAiTool} siteUrl={siteUrl} status={status} />
-      )}
-      {step === 4 && (
         <StepCurriculum status={status} onCurriculumArrived={handleCurriculumArrived} />
       )}
 
@@ -184,7 +181,7 @@ export function Wizard({
         >
           Back
         </button>
-        {step < 4 ? (
+        {step < 3 ? (
           <button
             type="button"
             onClick={next}

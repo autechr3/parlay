@@ -1,7 +1,7 @@
 // vitest cannot resolve the "@/" alias, so import the modules under test relatively (see
 // tests/curriculum-actions.test.ts for the same convention).
 import { useState } from "react";
-import { render, fireEvent, screen, act } from "@testing-library/react";
+import { render, fireEvent, screen, act, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { StepLanguage, type WizardLanguage } from "../src/components/wizard/StepLanguage";
 import { StepSkill } from "../src/components/wizard/StepSkill";
@@ -61,6 +61,10 @@ describe("StepLanguage", () => {
   });
 });
 
+// StepSkill is no longer its own wizard step — it is deleted from the step rail but the
+// component itself is unchanged and still fully functional; it now renders inside StepConnect's
+// "Set up manually instead" <details>. These direct-render tests keep proving the component
+// works standalone (tabs/copy/download), independent of where its parent mounts it.
 describe("StepSkill", () => {
   const baseProps = {
     languageCode: "fa",
@@ -122,15 +126,48 @@ describe("StepSkill", () => {
 });
 
 describe("StepConnect", () => {
-  const baseProps = { siteUrl: "http://localhost:3000" };
+  const baseProps = {
+    languageCode: "fa",
+    languageName: "Persian",
+    siteUrl: "http://localhost:3000",
+  };
 
-  it("renders the connector URL as siteUrl + /api/mcp", () => {
-    render(<StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />);
-    expect(screen.getByText("http://localhost:3000/api/mcp")).toBeTruthy();
+  it("renders a bootstrap prompt (from buildBootstrapPrompt) naming get_tutor_instructions", () => {
+    const { container } = render(
+      <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
+    const pre = container.querySelector("pre");
+    expect(pre).not.toBeNull();
+    expect(pre!.textContent).toContain("get_tutor_instructions");
+    expect(pre!.textContent).toContain("get_study_state");
+  });
+
+  it("copy button (for the bootstrap prompt) writes the prompt text to the clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    const { container } = render(
+      <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
+    const pre = container.querySelector("pre")!;
+    fireEvent.click(screen.getAllByText("Copy")[0]);
+    await Promise.resolve();
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toBe(pre.textContent);
+  });
+
+  it("renders the connector URL as a copyable line beneath the prompt", () => {
+    render(
+      <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
+    expect(screen.getAllByText("http://localhost:3000/api/mcp").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows the neutral waiting strip when there is no token", () => {
-    render(<StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />);
+    render(
+      <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
     expect(screen.getByText(/Waiting for your AI tool to connect/)).toBeTruthy();
   });
 
@@ -147,33 +184,49 @@ describe("StepConnect", () => {
     expect(screen.queryByText(/Waiting for your AI tool to connect/)).toBeNull();
   });
 
-  it("shows the ChatGPT best-effort caveat only on the chatgpt tab", () => {
+  it("has a 'Set up manually instead' details section, collapsed by default, containing StepSkill content and the per-tool connector instructions", () => {
+    const { container } = render(
+      <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
+    const details = container.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details!.open).toBeFalsy();
+    expect(screen.getByText("Set up manually instead")).toBeTruthy();
+
+    // A known StepSkill string (its YAML frontmatter) is present in the DOM even though the
+    // <details> is collapsed — jsdom doesn't apply the browser's UA-stylesheet visibility hiding,
+    // so the content is reachable without simulating a click on <summary>.
+    expect(details!.textContent).toContain("---\nname: persian-tutor");
+
+    // The old per-tool connector instructions (moved out of StepConnect's main body) are also
+    // present inside the details.
+    const withinDetails = within(details!);
+    expect(withinDetails.getByText(/Add custom connector/)).toBeTruthy();
+  });
+
+  it("shows the ChatGPT best-effort caveat (via the embedded StepSkill) only on the chatgpt tab", () => {
     const { rerender, queryByText } = render(
       <StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />,
     );
     expect(queryByText(/best-effort and untested/i)).toBeNull();
 
-    rerender(<StepConnect {...baseProps} aiTool="chatgpt" onAiToolChange={() => {}} status={makeStatus()} />);
+    rerender(
+      <StepConnect {...baseProps} aiTool="chatgpt" onAiToolChange={() => {}} status={makeStatus()} />,
+    );
     expect(queryByText(/best-effort and untested/i)).toBeTruthy();
-  });
-
-  it("copy button writes the connector URL to the clipboard", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-
-    render(<StepConnect {...baseProps} aiTool="claude" onAiToolChange={() => {}} status={makeStatus()} />);
-    fireEvent.click(screen.getByText("Copy"));
-    await Promise.resolve();
-
-    expect(writeText).toHaveBeenCalledWith("http://localhost:3000/api/mcp");
   });
 });
 
 describe("StepCurriculum", () => {
-  it("renders the create-course prompt and a waiting strip when there is no curriculum yet", () => {
+  it("renders the waiting copy explaining the tutor will interview then import, and a waiting strip when there is no curriculum yet", () => {
     render(<StepCurriculum status={makeStatus()} onCurriculumArrived={() => {}} />);
-    expect(screen.getByText(/beginner Farsi curriculum/)).toBeTruthy();
+    expect(screen.getByText(/interview you about pace and interests/)).toBeTruthy();
     expect(screen.getByText(/Waiting for your tutor to import a curriculum/)).toBeTruthy();
+  });
+
+  it("does NOT render a <pre> prompt block — the prompt moved to step 2's bootstrap prompt", () => {
+    const { container } = render(<StepCurriculum status={makeStatus()} onCurriculumArrived={() => {}} />);
+    expect(container.querySelector("pre")).toBeNull();
   });
 
   it("renders the imported strip with a Start learning link once curriculumCount > 0", () => {
@@ -205,7 +258,7 @@ describe("StepCurriculum", () => {
 
     // StepCurriculum itself does not guard against repeat calls — that guard is Wizard's job
     // (it stays mounted for the whole session, unlike this component, which remounts every time
-    // the learner steps off step 4). This component's contract is simply "tell the parent
+    // the learner steps off step 3). This component's contract is simply "tell the parent
     // whenever curriculumCount > 0"; a rerender with an unchanged count is a no-op React bail-out,
     // not a call this component chose to suppress.
     rerender(
@@ -231,28 +284,6 @@ describe("StepCurriculum", () => {
     fireEvent.click(summary);
     const link = screen.getByText("import a content package manually").closest("a");
     expect(link?.getAttribute("href")).toBe("/curriculums/import");
-  });
-
-  it("copy button writes the create-course prompt to the clipboard", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-
-    render(<StepCurriculum status={makeStatus()} onCurriculumArrived={() => {}} />);
-    fireEvent.click(screen.getByText("Copy"));
-    await Promise.resolve();
-
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect(writeText.mock.calls[0][0]).toContain("beginner Farsi curriculum");
-  });
-
-  it("passes status.hasToken through to buildCreateCoursePrompt — unconnected learner gets the JSON-only closing", () => {
-    render(<StepCurriculum status={makeStatus({ hasToken: false })} onCurriculumArrived={() => {}} />);
-    expect(screen.getByText(/Output ONLY the JSON object/)).toBeTruthy();
-  });
-
-  it("passes status.hasToken through to buildCreateCoursePrompt — connected learner gets the tool-call closing", () => {
-    render(<StepCurriculum status={makeStatus({ hasToken: true })} onCurriculumArrived={() => {}} />);
-    expect(screen.getByText(/import_content_package tool/)).toBeTruthy();
   });
 });
 
@@ -291,16 +322,24 @@ describe("Wizard", () => {
     });
   }
 
-  function goToStep3() {
+  // Selecting a language now lands directly on step 2 (Connect your AI) — StepSkill is no longer
+  // a standalone step in between, so there is no extra Next click required to reach it.
+  function goToStep2() {
     fireEvent.click(screen.getByText("فارسی").closest("button")!); // step 1 -> 2
-    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
   }
 
-  it("fetches /welcome/status immediately on entering step 3, then again on each 4s tick", async () => {
+  it("rail shows the three renumbered step labels", () => {
+    render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
+    expect(screen.getByText("Choose language")).toBeTruthy();
+    expect(screen.getByText("Connect your AI")).toBeTruthy();
+    expect(screen.getByText("First curriculum")).toBeTruthy();
+  });
+
+  it("fetches /welcome/status immediately on entering step 2, then again on each 4s tick", async () => {
     const fetchMock = stubFetch(makeStatus());
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -315,7 +354,7 @@ describe("Wizard", () => {
     stubFetch(makeStatus(), makeStatus({ hasToken: true, tokenName: "my-mac" }));
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
 
     await act(async () => {
@@ -326,17 +365,17 @@ describe("Wizard", () => {
     expect(screen.getByText(/✓ Connected.*my-mac.*active/)).toBeTruthy();
   });
 
-  it("on step 4, renders the Start learning link and calls completeOnboarding exactly once once a curriculum arrives", async () => {
+  it("on step 3, renders the Start learning link and calls completeOnboarding exactly once once a curriculum arrives", async () => {
     const fetchMock = stubFetch(
+      makeStatus(), // step 2 immediate fetch
       makeStatus(), // step 3 immediate fetch
-      makeStatus(), // step 4 immediate fetch
       makeStatus({ curriculumCount: 1, firstCurriculumName: "Farsi A1" }), // first 4s tick
     );
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
     await flush();
 
     await act(async () => {
@@ -361,13 +400,13 @@ describe("Wizard", () => {
     expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
   });
 
-  it("stops fetching once the Wizard unmounts while on step 3", async () => {
+  it("stops fetching once the Wizard unmounts while on step 2", async () => {
     const fetchMock = stubFetch(makeStatus());
     const { unmount } = render(
       <Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />,
     );
 
-    goToStep3();
+    goToStep2();
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -380,17 +419,17 @@ describe("Wizard", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("stepping Back from step 3 to step 2 stops polling entirely — no fetch on leaving, none on later ticks", async () => {
+  it("stepping Back from step 2 to step 1 stops polling entirely — no fetch on leaving, none on later ticks", async () => {
     const fetchMock = stubFetch(makeStatus());
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText("Back")); // step 3 -> 2
+    fireEvent.click(screen.getByText("Back")); // step 2 -> 1
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1); // leaving step 3 fetches nothing extra
+    expect(fetchMock).toHaveBeenCalledTimes(1); // leaving step 2 fetches nothing extra
 
     await act(async () => {
       vi.advanceTimersByTime(8000);
@@ -399,38 +438,38 @@ describe("Wizard", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // the interval was actually cleared, not just idle
   });
 
-  it("stepping from step 4 Back to step 3 keeps polling and fetches immediately on the transition itself", async () => {
+  it("stepping from step 3 Back to step 2 keeps polling and fetches immediately on the transition itself", async () => {
     const fetchMock = stubFetch(makeStatus());
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1); // entering step 3
+    expect(fetchMock).toHaveBeenCalledTimes(1); // entering step 2
 
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(2); // entering step 4
+    expect(fetchMock).toHaveBeenCalledTimes(2); // entering step 3
 
-    fireEvent.click(screen.getByText("Back")); // step 4 -> 3
+    fireEvent.click(screen.getByText("Back")); // step 3 -> 2
     await flush();
     // The call count increments from the transition itself, before any 4s tick elapses.
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("remounting StepCurriculum via Back(3)->Next(4) after arrival does not re-fire completeOnboarding", async () => {
+  it("remounting StepCurriculum via Back(2)->Next(3) after arrival does not re-fire completeOnboarding", async () => {
     // Regression test: the "fire once" guard must live in Wizard (which stays mounted for the
     // whole session), not inside StepCurriculum (which unmounts every time the learner steps off
-    // step 4) — otherwise a fresh StepCurriculum instance gets a fresh ref and re-fires.
+    // step 3) — otherwise a fresh StepCurriculum instance gets a fresh ref and re-fires.
     stubFetch(
+      makeStatus(), // step 2 immediate fetch
       makeStatus(), // step 3 immediate fetch
-      makeStatus(), // step 4 immediate fetch
       makeStatus({ curriculumCount: 1, firstCurriculumName: "Farsi A1" }), // first 4s tick
     );
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
     await flush();
 
     await act(async () => {
@@ -439,22 +478,22 @@ describe("Wizard", () => {
     await flush();
     expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText("Back")); // step 4 -> 3, unmounts StepCurriculum
+    fireEvent.click(screen.getByText("Back")); // step 3 -> 2, unmounts StepCurriculum
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4, remounts a fresh StepCurriculum
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3, remounts a fresh StepCurriculum
     await flush();
 
     expect(screen.getByText(/✓ 'Farsi A1' imported/)).toBeTruthy();
     expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
   });
 
-  it("Finish on step 4 calls completeOnboarding and navigates to /curriculums", async () => {
+  it("Finish on step 3 calls completeOnboarding and navigates to /curriculums", async () => {
     stubFetch(makeStatus());
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
     await flush();
 
     fireEvent.click(screen.getByText("Finish"));
@@ -492,20 +531,20 @@ describe("Wizard", () => {
     // The first attempt to stamp completeOnboarding on curriculum arrival fails. Wizard's own
     // /welcome/status polling never fires again after arrival (status.curriculumCount > 0 stops
     // it for good — see the fetch-effect's early return), so the only remaining trigger for a
-    // retry is a fresh mount of StepCurriculum: Back(4->3) then Next(3->4) unmounts and remounts
+    // retry is a fresh mount of StepCurriculum: Back(3->2) then Next(2->3) unmounts and remounts
     // it, and its mount effect re-checks status.curriculumCount independently of Wizard's ref.
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     completeOnboardingMock.mockRejectedValueOnce(new Error("transient failure"));
     stubFetch(
+      makeStatus(), // step 2 immediate fetch
       makeStatus(), // step 3 immediate fetch
-      makeStatus(), // step 4 immediate fetch
       makeStatus({ curriculumCount: 1, firstCurriculumName: "Farsi A1" }), // first 4s tick
     );
     render(<Wizard languages={languages} initialStatus={makeStatus()} siteUrl="http://localhost:3000" />);
 
-    goToStep3();
+    goToStep2();
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3
     await flush();
 
     await act(async () => {
@@ -516,9 +555,9 @@ describe("Wizard", () => {
     expect(completeOnboardingMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/✓ 'Farsi A1' imported/)).toBeTruthy();
 
-    fireEvent.click(screen.getByText("Back")); // step 4 -> 3, unmounts StepCurriculum
+    fireEvent.click(screen.getByText("Back")); // step 3 -> 2, unmounts StepCurriculum
     await flush();
-    fireEvent.click(screen.getByText("Next")); // step 3 -> 4, remounts StepCurriculum, retries the stamp
+    fireEvent.click(screen.getByText("Next")); // step 2 -> 3, remounts StepCurriculum, retries the stamp
     await flush();
 
     expect(completeOnboardingMock).toHaveBeenCalledTimes(2);
