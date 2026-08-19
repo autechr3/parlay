@@ -28,7 +28,7 @@ export function Summary({ summary, rtl }: { summary: DrillSummary; rtl: boolean 
         <View style={{ display: "flex", flexDirection: "column", gap: space(1) }}>
           <Text style={{ fontFamily: font.body, fontSize: "0.85em", color: theme.muted }}>Missed</Text>
           {summary.missed.map((m, i) => (
-            <View key={i} dir={rtl ? "rtl" : "ltr"}>
+            <View key={i} dir="auto">
               <Text lang={rtl ? "fa" : undefined} style={{ fontFamily: font.script, fontSize: "1.2em", color: theme.text }}>
                 {m}
               </Text>

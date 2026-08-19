@@ -4,6 +4,7 @@ import { ThemeProvider } from "../src/widgets/drill/theme";
 import { ChoiceCard } from "../src/widgets/drill/components/ChoiceCard";
 import { TypedCard } from "../src/widgets/drill/components/TypedCard";
 import { MatchCard, seededShuffle } from "../src/widgets/drill/components/MatchCard";
+import { ClozeCard } from "../src/widgets/drill/components/ClozeCard";
 import { themes } from "../src/lib/design/tokens";
 import type { Exercise } from "../src/lib/exercises/schema";
 
@@ -92,5 +93,23 @@ describe("bidi chrome", () => {
     } as Extract<Exercise, { type: "choice" }>;
     const { getByText } = wrap(<ChoiceCard exercise={ex} languageCode="fa" onAnswer={vi.fn()} />);
     expect(getByText("آب").closest('[dir="rtl"]')).toBeTruthy();
+  });
+});
+
+describe("cloze bidi", () => {
+  // Direction must come from the sentence CONTENT, not the drill language: a
+  // Farsi drill legitimately contains English cloze sentences (script lessons).
+  // Regression: "A letter has up to ___ positional forms." rendered backwards.
+  const englishCloze = {
+    id: "c9", type: "cloze", prompt: { text: "Complete the sentence" },
+    tokens: ["A", "letter", "has", "up", "to", "___", "positional", "forms."],
+    blanks: [{ index: 5, expected: ["four"] }],
+    mode: "tiles", tiles: ["two", "three", "four", "six"],
+  } as Extract<Exercise, { type: "cloze" }>;
+
+  it("token row uses content-based direction (dir=auto), not drill-language rtl", () => {
+    const { getByText } = wrap(<ClozeCard exercise={englishCloze} languageCode="fa" onAnswer={vi.fn()} />);
+    const row = getByText("positional").closest("[dir]") as HTMLElement;
+    expect(row.getAttribute("dir")).toBe("auto");
   });
 });

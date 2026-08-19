@@ -4,11 +4,11 @@ import type { CSSProperties, ReactNode } from "react";
 // by reimplementing this module with View/Text/Pressable/TextInput.
 type BaseProps = { style?: CSSProperties; children?: ReactNode };
 
-export function View({ style, children, dir }: BaseProps & { dir?: "rtl" | "ltr" }) {
+export function View({ style, children, dir }: BaseProps & { dir?: "rtl" | "ltr" | "auto" }) {
   return <div dir={dir} style={style}>{children}</div>;
 }
 
-export function Text({ style, children, lang, dir }: BaseProps & { lang?: string; dir?: "rtl" | "ltr" }) {
+export function Text({ style, children, lang, dir }: BaseProps & { lang?: string; dir?: "rtl" | "ltr" | "auto" }) {
   return <span lang={lang} dir={dir} style={style}>{children}</span>;
 }
 
@@ -31,7 +31,7 @@ export function Pressable({ style, children, onPress, disabled, ariaLabel, preve
 
 export function TextInputBox({ value, onChange, onSubmit, dir, style, ariaLabel }: {
   value: string; onChange: (v: string) => void; onSubmit?: () => void;
-  dir?: "rtl" | "ltr"; style?: CSSProperties; ariaLabel?: string;
+  dir?: "rtl" | "ltr" | "auto"; style?: CSSProperties; ariaLabel?: string;
 }) {
   return (
     <input

@@ -84,7 +84,9 @@ export function ClozeCard({ exercise, languageCode, onAnswer, onContinue }: {
       onContinue={onContinue}
     >
       <View style={{ display: "flex", flexDirection: "column", gap: space(3) }}>
-        <View dir={rtl ? "rtl" : "ltr"} style={{ display: "flex", flexWrap: "wrap", gap: space(2), alignItems: "center" }}>
+        {/* dir="auto": direction follows the sentence's own first strong character,
+            so English cloze sentences in a Farsi drill stay LTR and Persian ones RTL. */}
+        <View dir="auto" style={{ display: "flex", flexWrap: "wrap", gap: space(2), alignItems: "center" }}>
           {exercise.tokens.map((tok, i) => {
             const blankPos = exercise.blanks.findIndex((b) => b.index === i);
             if (blankPos === -1) {
@@ -114,7 +116,7 @@ export function ClozeCard({ exercise, languageCode, onAnswer, onContinue }: {
                 value={typedValues[blankPos]}
                 onChange={(v) => setTypedValues((vals) => vals.map((x, idx) => (idx === blankPos ? v : x)))}
                 onSubmit={submit}
-                dir={rtl ? "rtl" : "ltr"}
+                dir="auto"
                 style={{
                   width: 72,
                   fontFamily: font.script,
