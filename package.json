@@ -12,9 +12,14 @@
     "e2e": "playwright test",
     "seed": "tsx scripts/seed-lessons.ts",
     "mcp:smoke": "tsx scripts/mcp-smoke.ts",
-    "oauth:smoke": "tsx scripts/oauth-smoke.ts"
+    "oauth:smoke": "tsx scripts/oauth-smoke.ts",
+    "widgets:build": "vite build --config src/widgets/drill/vite.config.ts && tsx scripts/wrap-widget-html.ts",
+    "predev": "npm run widgets:build",
+    "prebuild": "npm run widgets:build"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "csv-parse": "^7.0.2",
@@ -47,6 +52,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.11",
     "typescript": "^5",
+    "vite": "^8.2.1",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.10"
   }
 }

@@ -47,3 +47,7 @@ next-env.d.ts
 
 # scratch
 .superpowers/
+
+# generated widget build artifacts
+src/widgets/dist/
+src/widgets/generated/
