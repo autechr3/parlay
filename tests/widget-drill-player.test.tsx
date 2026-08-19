@@ -35,6 +35,9 @@ describe("DrillPlayer", () => {
     expect(onAttempt.mock.calls[1][0]).toMatchObject({ exercise_id: "c1", correct: false });
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete.mock.calls[0][0]).toMatchObject({ total: 2, correct: 1 });
+    expect(onComplete.mock.calls[0][0].missed).toEqual([
+      { label: "fill", expected: "آب", isTerm: false },
+    ]);
     expect(getByText("1/2")).toBeTruthy();               // summary score
   });
 });

@@ -62,6 +62,7 @@ export function MatchCard({ exercise, languageCode, onAnswer, onContinue }: {
   const [selectedLeft, setSelectedLeft] = useState<number | null>(null);
   const [selectedRight, setSelectedRight] = useState<number | null>(null);
   const [misses, setMisses] = useState(0);
+  const [missedPairs, setMissedPairs] = useState<Set<number>>(new Set());
   const [lastMiss, setLastMiss] = useState<{ l: number; r: number } | null>(null);
   const [done, setDone] = useState<{ correct: boolean } | null>(null);
 
@@ -76,10 +77,20 @@ export function MatchCard({ exercise, languageCode, onAnswer, onContinue }: {
       if (next.size === exercise.pairs.length) {
         const correct = misses === 0;
         setDone({ correct });
-        onAnswer({ correct, answer_given: JSON.stringify({ misses }), ms_taken: Date.now() - mountedAt.current });
+        // Every pair involved in a wrong tap, as "left → right", so the summary
+        // and the tutor can name what actually needs review.
+        const missed_pairs = [...missedPairs].sort((a, b) => a - b)
+          .map((i) => `${exercise.pairs[i].left} → ${exercise.pairs[i].right}`);
+        onAnswer({ correct, answer_given: JSON.stringify({ misses, missed_pairs }), ms_taken: Date.now() - mountedAt.current });
       }
     } else {
       setMisses((m) => m + 1);
+      setMissedPairs((prev) => {
+        const s = new Set(prev);
+        s.add(l);
+        s.add(r);
+        return s;
+      });
       setLastMiss({ l, r });
       setSelectedLeft(null);
       setSelectedRight(null);
@@ -120,6 +131,11 @@ export function MatchCard({ exercise, languageCode, onAnswer, onContinue }: {
       rtl={rtl}
       onContinue={onContinue}
     >
+      {!done && (
+        <Text style={{ fontFamily: font.body, fontSize: "0.85em", color: theme.muted }}>
+          Tap a word, then tap its match.
+        </Text>
+      )}
       <View style={{ display: "flex", flexDirection: rtl ? "row-reverse" : "row", gap: space(4) }}>
         <View style={{ display: "flex", flexDirection: "column", gap: space(2), flex: 1 }}>
           {left.map((item) => (

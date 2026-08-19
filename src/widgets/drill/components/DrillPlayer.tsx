@@ -11,7 +11,10 @@ import { Progress } from "./Progress";
 import { Summary } from "./Summary";
 
 export type AttemptEvent = { exercise_id: string; correct: boolean; answer_given: string; ms_taken: number };
-export type DrillSummary = { total: number; correct: number; missed: string[] };
+// isTerm marks labels that are target-language script (styled/directed as such);
+// text-prompt labels stay in the UI's own typography.
+export type MissedItem = { label: string; expected: string; isTerm: boolean };
+export type DrillSummary = { total: number; correct: number; missed: MissedItem[] };
 
 export function DrillPlayer({ drill, languageCode, theme, onAttempt, onComplete }: {
   drill: Drill;
@@ -29,9 +32,43 @@ export function DrillPlayer({ drill, languageCode, theme, onAttempt, onComplete 
   const current = finished ? null : drill.exercises[index];
   const rtl = languageCode === "fa";
 
-  function missedLabel(a: AttemptEvent): string {
+  function expectedFor(ex: Exercise, a: AttemptEvent): string {
+    switch (ex.type) {
+      case "choice":
+        return ex.options.find((o) => o.id === ex.correct_id)?.text ?? "";
+      case "typed":
+        return ex.expected[0];
+      case "cloze":
+        return ex.blanks.map((b) => b.expected[0]).join(" ");
+      case "match": {
+        // MatchCard reports the fumbled pairings in its answer payload.
+        try {
+          const parsed = JSON.parse(a.answer_given) as { missed_pairs?: string[] };
+          return (parsed.missed_pairs ?? []).join("; ");
+        } catch {
+          return "";
+        }
+      }
+    }
+  }
+
+  function missedItem(a: AttemptEvent): MissedItem {
     const ex = drill.exercises.find((e) => e.id === a.exercise_id);
-    return ex?.prompt.term ?? ex?.prompt.text ?? a.exercise_id;
+    if (!ex) return { label: a.exercise_id, expected: "", isTerm: false };
+    const text = ex.prompt.text ?? ex.id;
+    return {
+      label: ex.prompt.term ?? (text.length > 60 ? `${text.slice(0, 57)}…` : text),
+      expected: expectedFor(ex, a),
+      isTerm: !!ex.prompt.term,
+    };
+  }
+
+  function buildSummary(all: AttemptEvent[]): DrillSummary {
+    return {
+      total,
+      correct: all.filter((a) => a.correct).length,
+      missed: all.filter((a) => !a.correct).map(missedItem),
+    };
   }
 
   function handleAnswer(exercise: Exercise, a: { correct: boolean; answer_given: string; ms_taken: number }) {
@@ -45,9 +82,7 @@ export function DrillPlayer({ drill, languageCode, theme, onAttempt, onComplete 
     setIndex(next);
     if (next >= total && !completedRef.current) {
       completedRef.current = true;
-      const correct = attempts.filter((a) => a.correct).length;
-      const missed = attempts.filter((a) => !a.correct).map(missedLabel);
-      onComplete({ total, correct, missed });
+      onComplete(buildSummary(attempts));
     }
   }
 
@@ -65,13 +100,7 @@ export function DrillPlayer({ drill, languageCode, theme, onAttempt, onComplete 
     }
   }
 
-  const summary: DrillSummary | null = finished
-    ? {
-        total,
-        correct: attempts.filter((a) => a.correct).length,
-        missed: attempts.filter((a) => !a.correct).map(missedLabel),
-      }
-    : null;
+  const summary: DrillSummary | null = finished ? buildSummary(attempts) : null;
 
   return (
     <ThemeProvider theme={theme}>

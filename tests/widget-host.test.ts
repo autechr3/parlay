@@ -29,10 +29,11 @@ describe("widget store", () => {
 
 describe("buildCompletionUpdate", () => {
   it("summarizes for the model", () => {
-    const u = buildCompletionUpdate("d1", { total: 5, correct: 3, missed: ["آب", "نان"] });
+    const u = buildCompletionUpdate("d1", { total: 5, correct: 3, missed: [{ label: "آب", expected: "water", isTerm: true }, { label: "نان", expected: "bread", isTerm: true }] });
     expect(u.structuredContent).toMatchObject({ drill_id: "d1", total: 5, correct: 3 });
     const text = (u.content?.[0] as { text: string }).text;
     expect(text).toContain("3/5");
     expect(text).toContain("آب");
+    expect(text).toContain("water");
   });
 });

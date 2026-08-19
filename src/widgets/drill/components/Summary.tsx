@@ -25,13 +25,26 @@ export function Summary({ summary, rtl }: { summary: DrillSummary; rtl: boolean 
         {encouragement(summary.correct, summary.total)}
       </Text>
       {summary.missed.length > 0 && (
-        <View style={{ display: "flex", flexDirection: "column", gap: space(1) }}>
+        <View style={{ display: "flex", flexDirection: "column", gap: space(2) }}>
           <Text style={{ fontFamily: font.body, fontSize: "0.85em", color: theme.muted }}>Missed</Text>
           {summary.missed.map((m, i) => (
-            <View key={i} dir="auto">
-              <Text lang={rtl ? "fa" : undefined} style={{ fontFamily: font.script, fontSize: "1.2em", color: theme.text }}>
-                {m}
+            <View key={i} dir="auto" style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space(2) }}>
+              <Text
+                lang={m.isTerm && rtl ? "fa" : undefined}
+                style={m.isTerm
+                  ? { fontFamily: font.script, fontSize: "1.2em", color: theme.text }
+                  : { fontFamily: font.body, fontSize: "0.95em", color: theme.text }}
+              >
+                {m.label}
               </Text>
+              {m.expected && (
+                <>
+                  <Text style={{ fontFamily: font.body, color: theme.muted }}>→</Text>
+                  <Text dir="auto" style={{ fontFamily: font.script, fontSize: "1.1em", color: theme.correct, fontWeight: 600 }}>
+                    {m.expected}
+                  </Text>
+                </>
+              )}
             </View>
           ))}
         </View>

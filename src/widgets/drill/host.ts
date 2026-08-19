@@ -33,7 +33,9 @@ export function createWidgetStore(initialTheme: ThemeName = "light") {
 }
 
 export function buildCompletionUpdate(drillId: string, summary: DrillSummary) {
-  const missed = summary.missed.length ? ` Missed: ${summary.missed.join("، ")}.` : "";
+  const missed = summary.missed.length
+    ? ` Missed: ${summary.missed.map((m) => (m.expected ? `${m.label} (correct: ${m.expected})` : m.label)).join("; ")}.`
+    : "";
   return {
     content: [{
       type: "text" as const,

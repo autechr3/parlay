@@ -64,7 +64,11 @@ describe("MatchCard", () => {
     fireEvent.click(getByText("آب")); fireEvent.click(getByText("bread")); // miss
     fireEvent.click(getByText("آب")); fireEvent.click(getByText("water"));
     fireEvent.click(getByText("نان")); fireEvent.click(getByText("bread"));
-    expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ correct: false, answer_given: JSON.stringify({ misses: 1 }) }));
+    const call = onAnswer.mock.calls[0][0];
+    expect(call.correct).toBe(false);
+    const payload = JSON.parse(call.answer_given);
+    expect(payload.misses).toBe(1);
+    expect(payload.missed_pairs).toEqual(["آب → water", "نان → bread"]);
   });
 });
 
