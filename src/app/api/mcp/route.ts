@@ -34,6 +34,9 @@ async function toolResult(fn: () => Promise<unknown>) {
     const out = await fn();
     return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 2) }] };
   } catch (e) {
+    // Tool-level failures ride inside HTTP 200s, so without this line they are
+    // invisible in production logs.
+    console.error("[mcp tool error]", (e as Error).message);
     return {
       content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
       isError: true,
@@ -54,6 +57,7 @@ async function toolResultVerbatim(fn: () => Promise<string>) {
     const text = await fn();
     return { content: [{ type: "text" as const, text }] };
   } catch (e) {
+    console.error("[mcp tool error]", (e as Error).message);
     return {
       content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
       isError: true,
@@ -73,6 +77,7 @@ async function toolResultStructured(
     const { text, structured } = await fn();
     return { content: [{ type: "text" as const, text }], structuredContent: structured };
   } catch (e) {
+    console.error("[mcp tool error]", (e as Error).message);
     return {
       content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
       isError: true,
