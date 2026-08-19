@@ -44,7 +44,7 @@ describe("tutor-skill frontmatter", () => {
     const frontmatter = skill.slice(4, closeIdx);
     expect(frontmatter).toContain("name: persian-tutor");
     expect(frontmatter).toContain(
-      "description: Persian language tutor connected to the learner's Farsi Progress Tracker app",
+      "description: Persian language tutor connected to the learner's Parlay app",
     );
     expect(frontmatter).toContain("tracks lessons, SRS vocabulary review, and authors curriculum content directly via MCP tools.");
   });
@@ -53,7 +53,7 @@ describe("tutor-skill frontmatter", () => {
     const skill = buildTutorSkill(faParams);
     const expected = `---
 name: persian-tutor
-description: Persian language tutor connected to the learner's Farsi Progress Tracker app — tracks lessons, SRS vocabulary review, and authors curriculum content directly via MCP tools.
+description: Persian language tutor connected to the learner's Parlay app — tracks lessons, SRS vocabulary review, and authors curriculum content directly via MCP tools.
 ---`;
     expect(skill.startsWith(expected)).toBe(true);
   });
@@ -154,7 +154,7 @@ describe("buildBootstrapPrompt", () => {
   it("covers all three platform connect paths with exact strings", () => {
     const prompt = buildBootstrapPrompt(p);
     expect(prompt).toContain("Settings → Connectors");
-    expect(prompt).toContain("claude mcp add --transport http farsi-tracker");
+    expect(prompt).toContain("claude mcp add --transport http parlay");
     expect(prompt).toContain("ChatGPT");
   });
 

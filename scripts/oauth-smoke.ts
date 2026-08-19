@@ -375,7 +375,7 @@ async function main() {
       clientInfo: { name: "oauth-smoke", version: "1.0.0" },
     })) as { serverInfo?: { name?: string } };
     assert(
-      initResult?.serverInfo?.name === "farsi-tracker",
+      initResult?.serverInfo?.name === "parlay",
       `unexpected initialize result: ${JSON.stringify(initResult)}`,
     );
     await rpcNotify(mintedAccessToken, "notifications/initialized");

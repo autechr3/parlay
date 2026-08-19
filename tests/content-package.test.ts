@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ContentPackageSchema, slugify, buildLessonPayload, deriveVocabScript,
-  assertLanguageUnchanged, buildCurriculumPayload } from "../src/lib/content-package";
+  assertLanguageUnchanged, buildCurriculumPayload, parseAnyPackage } from "../src/lib/content-package";
 
 const minimal = {
   format: "farsi-tracker/content-package", version: 2,
@@ -58,6 +58,13 @@ describe("ContentPackageSchema", () => {
       vocab: [{ term: "رفتن", transliteration: "raftan", translation: "to go",
         morphology: { present_stem: "رو", past_stem: "رفت" } }] }] };
     expect(ContentPackageSchema.safeParse(pkg).success).toBe(true);
+  });
+  it("accepts both parlay and legacy farsi-tracker format literals", () => {
+    const base = JSON.parse(JSON.stringify(minimal));
+    base.format = "parlay/content-package";
+    expect(() => parseAnyPackage(base)).not.toThrow();
+    base.format = "farsi-tracker/content-package";
+    expect(() => parseAnyPackage(base)).not.toThrow();
   });
 });
 

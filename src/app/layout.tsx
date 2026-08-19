@@ -13,7 +13,7 @@ const estedad = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = { title: "Farsi Tracker" };
+export const metadata: Metadata = { title: "Parlay" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();

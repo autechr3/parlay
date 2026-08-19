@@ -43,7 +43,11 @@ const LessonSchema = z.object({
 export type Lesson = z.infer<typeof LessonSchema>;
 
 export const ContentPackageSchema = z.object({
-  format: z.literal("farsi-tracker/content-package"),
+  format: z.union([
+    z.literal("parlay/content-package"),
+    // accepted forever: packages generated before the 2026-08 rename
+    z.literal("farsi-tracker/content-package"),
+  ]),
   version: z.literal(2),
   curriculum: z.object({
     name: z.string().trim().min(1),

@@ -43,7 +43,7 @@ async function main() {
   const csvLessons = new Set(csvRows.map((r) => r.lesson));
 
   const pkg = ContentPackageSchema.parse({
-    format: "farsi-tracker/content-package",
+    format: "parlay/content-package",
     version: 2,
     curriculum: { name: "Farsi", language: "fa", description: "Structured Farsi curriculum, generated lessons" },
     units: [...new Set(parsed.map((l) => l.unit))].map((n) => ({ number: n, title: `Unit ${n}` })),

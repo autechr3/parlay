@@ -176,7 +176,7 @@ function registerTools(server: McpServer, userId: string) {
     "import_content_package",
     {
       description:
-        "Import or update a curriculum's units, lessons, vocab, and exercises from a farsi-tracker content package, when generating or loading new curriculum content.",
+        "Import or update a curriculum's units, lessons, vocab, and exercises from a Parlay content package, when generating or loading new curriculum content.",
       inputSchema: z.object({ package: z.unknown() }),
     },
     ({ package: pkg }) =>
@@ -261,7 +261,7 @@ async function handleMcpRequest(req: Request): Promise<Response> {
   }
   const handler = createMcpHandler(
     (server) => registerTools(server, auth.userId),
-    { serverInfo: { name: "farsi-tracker", version: "1.0.0" } },
+    { serverInfo: { name: "parlay", version: "1.0.0" } },
   );
   return handler(req);
 }

@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   return new Response(JSON.stringify(out, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="farsi-tracker-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="parlay-export-${new Date().toISOString().slice(0, 10)}.json"`,
     },
   });
 }

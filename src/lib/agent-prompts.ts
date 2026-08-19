@@ -2,10 +2,10 @@
 // No imports needed — this module has zero dependencies on Next.js or Supabase.
 
 export const SCHEMA_DOC = `
-You must return a single JSON object in the "farsi-tracker/content-package" format. Full example:
+You must return a single JSON object in the "parlay/content-package" format. Full example:
 
 {
-  "format": "farsi-tracker/content-package",
+  "format": "parlay/content-package",
   "version": 2,
   "curriculum": { "name": "Farsi A1", "language": "fa", "description": "optional" },
   "units": [ { "number": 1, "title": "Foundations", "description": null } ],
@@ -35,7 +35,7 @@ You must return a single JSON object in the "farsi-tracker/content-package" form
 }
 
 Field notes:
-- "format" (required): must be exactly the literal string "farsi-tracker/content-package".
+- "format" (required): must be exactly the literal string "parlay/content-package".
 - "version" (required): must be exactly the number 2.
 - "curriculum.name" (required): the curriculum is matched on (owner, name) — an existing curriculum
   with this exact name is updated in place, otherwise a new one is created. "curriculum.language"

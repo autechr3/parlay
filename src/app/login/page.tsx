@@ -34,7 +34,7 @@ function LoginForm() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-bold">Farsi Tracker</h1>
+      <h1 className="text-2xl font-bold">Parlay</h1>
       <form onSubmit={magicLink} className="flex flex-col gap-3">
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com" className="rounded border p-3" />

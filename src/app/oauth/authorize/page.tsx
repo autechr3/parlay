@@ -66,10 +66,10 @@ export default async function AuthorizePage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-bold">Farsi Tracker</h1>
+      <h1 className="text-2xl font-bold">Parlay</h1>
       <div className="rounded border p-4">
         <p className="mb-4 text-sm text-gray-700">
-          <strong>{client.client_name}</strong> wants to access your Farsi tracker.
+          <strong>{client.client_name}</strong> wants to access your Parlay data.
         </p>
         <form method="POST" action="/oauth/authorize/approve" className="flex flex-col gap-3">
           <input type="hidden" name="client_id" value={sp.client_id} />

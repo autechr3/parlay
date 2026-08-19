@@ -26,7 +26,7 @@ export function tutorSkillFilename(languageCode: string): string {
 // gpt-instructions opening sentence say the same thing in two shapes (YAML value vs. a
 // standalone sentence), so the wording lives here once.
 function tutorDescription(languageName: string): string {
-  return `${languageName} language tutor connected to the learner's Farsi Progress Tracker app — tracks lessons, SRS vocabulary review, and authors curriculum content directly via MCP tools.`;
+  return `${languageName} language tutor connected to the learner's Parlay app — tracks lessons, SRS vocabulary review, and authors curriculum content directly via MCP tools.`;
 }
 
 function frontmatter(languageName: string): string {
@@ -44,7 +44,7 @@ function gptOpeningLine(languageName: string): string {
 function roleSection(languageName: string): string {
   return `# Role
 
-You are a ${languageName} language tutor for a learner using the Farsi Progress Tracker app. You run tutoring sessions (spaced-repetition review, lesson teaching, free conversation practice) AND you author the learner's curriculum content directly through the app's MCP tools — you are not just an assistant that talks about the material, you are the one who writes it into their account.`;
+You are a ${languageName} language tutor for a learner using the Parlay app. You run tutoring sessions (spaced-repetition review, lesson teaching, free conversation practice) AND you author the learner's curriculum content directly through the app's MCP tools — you are not just an assistant that talks about the material, you are the one who writes it into their account.`;
 }
 
 function sessionStartSection(): string {
@@ -102,7 +102,7 @@ function contentRulesSection(languageCode: string): string {
 
 When you build a content-package v2 object for \`import_content_package\`, follow these rules. You don't need to memorize the full schema — if you get it wrong, the tool's validation error tells you exactly what to fix, so treat that as your safety net rather than something to avoid triggering.
 
-- \`format\` must be exactly \`"farsi-tracker/content-package"\` and \`version\` must be exactly \`2\`.
+- \`format\` must be exactly \`"parlay/content-package"\` and \`version\` must be exactly \`2\`.
 - Every vocab item's \`term\` must stay PLAIN — no diacritics. It's the identity key used to match existing vocab across re-imports; adding diacritics to it orphans the learner's SRS review history instead of updating the word in place. Diacritics belong only in \`term_vocalized\`.
 ${morphologyLine}
 - Exercises use one of four types: \`to_target\`, \`from_target\`, \`cloze\`, \`scramble\`.
@@ -118,7 +118,7 @@ If MCP tools are not connected or a call fails for reasons you can't fix (no too
 function connectionSection(siteUrl: string): string {
   return `# Connection
 
-This tutor talks to the Farsi Progress Tracker app over MCP at: ${siteUrl}/api/mcp`;
+This tutor talks to the Parlay app over MCP at: ${siteUrl}/api/mcp`;
 }
 
 function buildTutorSkillBody(p: TutorSkillParams): string {
@@ -153,13 +153,13 @@ export function buildBootstrapPrompt(p: {
   languageName: string;
   siteUrl: string;
 }): string {
-  return `You are helping me set up a ${p.languageName} tutor in the Farsi Progress Tracker app. Do this now:
+  return `You are helping me set up a ${p.languageName} tutor in the Parlay app. Do this now:
 
 1. Figure out which AI app you're running in right now (claude.ai, Claude Desktop, Claude Code, ChatGPT, or something else).
 
-2. Check whether you already have farsi-tracker MCP tools available. If not, connect them yourself using the path for THIS app — don't just describe it, walk me through actually doing it:
+2. Check whether you already have parlay MCP tools available. If not, connect them yourself using the path for THIS app — don't just describe it, walk me through actually doing it:
    - claude.ai or Claude Desktop: go to Settings → Connectors → Add custom connector, and enter this URL: ${p.siteUrl}/api/mcp — no client ID or secret is needed.
-   - Claude Code: run this yourself: claude mcp add --transport http farsi-tracker ${p.siteUrl}/api/mcp
+   - Claude Code: run this yourself: claude mcp add --transport http parlay ${p.siteUrl}/api/mcp
    - ChatGPT: open its connector or developer-mode settings and add ${p.siteUrl}/api/mcp as a connector (this flow varies by ChatGPT version — do your best).
    If you had to help me connect: wait for me to confirm before continuing. If the tools still don't appear after connecting, ask me to start a new conversation and paste this prompt again.
 

@@ -108,7 +108,7 @@ export function TokenManager({ tokens }: { tokens: Token[] }) {
 {`claude.ai → Settings → Connectors → Add custom connector → paste ${origin}/api/mcp
   → complete the sign-in/consent screen. No client ID or secret needed.
 Claude Code:
-  claude mcp add --transport http farsi-tracker ${origin}/api/mcp --header "Authorization: Bearer <token>"`}
+  claude mcp add --transport http parlay ${origin}/api/mcp --header "Authorization: Bearer <token>"`}
         </pre>
       </details>
     </section>

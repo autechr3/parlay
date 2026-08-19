@@ -15,7 +15,7 @@ const state: CurriculumState = {
 // rendered in the doc string, extracted as a real object so it can be validated against the
 // actual schema instead of regex-parsed out of the prose.
 const SCHEMA_DOC_EXAMPLE = {
-  format: "farsi-tracker/content-package",
+  format: "parlay/content-package",
   version: 2,
   curriculum: { name: "Farsi A1", language: "fa", description: "optional" },
   units: [{ number: 1, title: "Foundations", description: null }],
@@ -52,7 +52,7 @@ describe("agent prompts", () => {
   it("every prompt embeds format id, v2 schema and output rule", () => {
     for (const p of [buildCreateCoursePrompt(), buildNextLessonsPrompt(state, 5),
       buildExercisesPrompt(state, 4), buildAddVocabPrompt(state)]) {
-      expect(p).toContain("farsi-tracker/content-package");
+      expect(p).toContain("parlay/content-package");
       expect(p).toContain('"version": 2');
       expect(p).toContain('"term"');
       expect(p).toContain('"language": "fa"');

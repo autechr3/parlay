@@ -245,7 +245,7 @@ async function main() {
       clientInfo: { name: "mcp-smoke", version: "1.0.0" },
     })) as { serverInfo?: { name?: string } };
     assert(
-      initResult?.serverInfo?.name === "farsi-tracker",
+      initResult?.serverInfo?.name === "parlay",
       `unexpected initialize result: ${JSON.stringify(initResult)}`,
     );
     await rpcNotify(token, "notifications/initialized");

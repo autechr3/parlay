@@ -21,7 +21,7 @@ export function ImportForm() {
   return (
     <div className="flex flex-col gap-4">
       <textarea disabled={busy} value={raw} onChange={(e) => { setRaw(e.target.value); setOut(null); }}
-        placeholder='Paste your content-package JSON here ({"format":"farsi-tracker/content-package",...})'
+        placeholder='Paste your content-package JSON here ({"format":"parlay/content-package",...})'
         className="h-64 rounded border p-3 font-mono text-xs" />
       <input type="file" disabled={busy} accept=".json" onChange={async (e) => {
         const f = e.target.files?.[0];
