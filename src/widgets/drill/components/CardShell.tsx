@@ -18,9 +18,10 @@ export function CardShell({ prompt, rtl, status, onContinue, children }: {
   const theme = useTheme();
   const borderColor = status === "correct" ? theme.correct : status === "incorrect" ? theme.incorrect : theme.border;
 
+  // Chrome is always LTR: instructions are English prose (embedded Persian
+  // runs render correctly via inline bidi). Only script elements set rtl.
   return (
     <View
-      dir={rtl ? "rtl" : "ltr"}
       style={{
         background: theme.surface,
         borderRadius: radius.lg,
@@ -49,7 +50,7 @@ export function CardShell({ prompt, rtl, status, onContinue, children }: {
       )}
       {children}
       {status !== "active" && (
-        <View style={{ display: "flex", justifyContent: rtl ? "flex-start" : "flex-end" }}>
+        <View style={{ display: "flex", justifyContent: "flex-end" }}>
           <Pressable
             onPress={() => onContinue?.()}
             style={{

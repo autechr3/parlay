@@ -66,3 +66,31 @@ describe("MatchCard", () => {
     expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ correct: false, answer_given: JSON.stringify({ misses: 1 }) }));
   });
 });
+
+describe("bidi chrome", () => {
+  // Instructions are English prose (possibly with embedded Persian runs, even
+  // leading ones); the card chrome must stay LTR — only script elements carry
+  // dir="rtl". Regression: prod card rendered "?" on the wrong side because the
+  // whole card inherited rtl for fa drills.
+  it("keeps the card container LTR for fa drills", () => {
+    const ex = {
+      id: "e1", type: "choice",
+      prompt: { text: "ط and ز are letters. What sound do they make?" },
+      options: [{ id: "a", text: "t" }, { id: "b", text: "z" }],
+      correct_id: "a",
+    } as Extract<Exercise, { type: "choice" }>;
+    const { container } = wrap(<ChoiceCard exercise={ex} languageCode="fa" onAnswer={vi.fn()} />);
+    const cardRoot = container.firstElementChild as HTMLElement;
+    expect(cardRoot.getAttribute("dir")).not.toBe("rtl");
+  });
+  it("still renders script options RTL inside the LTR card", () => {
+    const ex = {
+      id: "e2", type: "choice",
+      prompt: { text: "Which means 'water'?" },
+      options: [{ id: "a", text: "آب", script: true }, { id: "b", text: "نان", script: true }],
+      correct_id: "a",
+    } as Extract<Exercise, { type: "choice" }>;
+    const { getByText } = wrap(<ChoiceCard exercise={ex} languageCode="fa" onAnswer={vi.fn()} />);
+    expect(getByText("آب").closest('[dir="rtl"]')).toBeTruthy();
+  });
+});

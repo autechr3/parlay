@@ -152,7 +152,7 @@ export function ClozeCard({ exercise, languageCode, onAnswer, onContinue }: {
         )}
 
         {!result && (
-          <View style={{ display: "flex", justifyContent: rtl ? "flex-start" : "flex-end" }}>
+          <View style={{ display: "flex", justifyContent: "flex-end" }}>
             <Pressable
               onPress={submit}
               disabled={!allFilled}
