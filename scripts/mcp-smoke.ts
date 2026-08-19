@@ -429,6 +429,16 @@ async function main() {
     // script to mint a fresh id from, and reusing gradedVocabId means the existing
     // preExistingVocabReview/review_log/study_days cleanup below already restores whatever
     // record_attempt's SRS side-effect touches, with no extra drill-specific vocab cleanup.
+    //
+    // Snapshot repetitions BEFORE this round-trip (the earlier grade_card call above already
+    // pushed it to >= 1, so a bare ">= 1" check after record_attempt can't tell its SRS
+    // side-effect apart from that prior call). drillGrade(true) is a fixed 4 (> 2), which
+    // grade_card_for's SM-2 branch always turns into exactly repetitions += 1, so a strict
+    // "+1" is a reliable, non-flaky assertion here — not just "some grade happened".
+    const { data: reviewRowBefore } = await admin.from("vocab_reviews").select("repetitions")
+      .eq("user_id", userId).eq("vocab_id", gradedVocabId).maybeSingle();
+    const repetitionsBefore = reviewRowBefore?.repetitions ?? 0;
+
     const drillCallResult = (await rpcRequest(token, "tools/call", {
       name: "present_drill",
       arguments: {
@@ -464,10 +474,16 @@ async function main() {
       `bad drill results: ${JSON.stringify(drillResults)}`,
     );
 
-    // cross-check SRS side-effect with the admin client: vocab_reviews row advanced
+    // cross-check SRS side-effect with the admin client: vocab_reviews row advanced by
+    // exactly this call's grade (strict +1 over the pre-round-trip snapshot), not just
+    // "some grade happened at some point in this run" (rec.srs_applied is self-reported
+    // by the function under test, so this needs independent discriminating power).
     const { data: reviewRow } = await admin.from("vocab_reviews").select("repetitions")
       .eq("user_id", userId).eq("vocab_id", gradedVocabId).maybeSingle();
-    assert(reviewRow && reviewRow.repetitions >= 1, "grade_card_for side-effect missing");
+    assert(
+      reviewRow && reviewRow.repetitions === repetitionsBefore + 1,
+      `grade_card_for side-effect missing or wrong: before=${repetitionsBefore}, after=${reviewRow?.repetitions}`,
+    );
     console.log(`drill round-trip OK (drill ${sc.drill_id}, record_attempt + get_drill_results + SRS verified)`);
 
     // Mark that all checks passed; cleanup will be exception-safe
