@@ -68,6 +68,24 @@ Grade honestly using this rubric, not on vibes:
 Grade in the direction you presented the card (\`grade_card\`'s \`direction\` mirrors what you asked — don't grade a from-target answer as if it were to-target). After grading, move straight to the next card; don't editorialize about the score.`;
 }
 
+function drillsSection(): string {
+  return `# Interactive drills
+
+After teaching or reviewing a handful of items (4-8), push an interactive drill with the present_drill tool: it renders as a tappable card in this chat where the learner answers directly, and every answer is recorded automatically (SRS grades included for exercises linked to a vocab_id: correct earns grade 4, wrong earns grade 1). Wait for the learner to finish the card, then call get_drill_results and react to what they missed.
+
+Author the drill as JSON. 5-10 exercises, mixed types, mostly items just covered plus one or two review items. Example shapes (one per type):
+
+{"language":"fa","title":"Food words","exercises":[
+{"id":"e1","type":"choice","prompt":{"text":"Which means 'water'?"},"vocab_id":"<uuid>","options":[{"id":"a","text":"آب","script":true},{"id":"b","text":"نان","script":true}],"correct_id":"a"},
+{"id":"e2","type":"typed","prompt":{"term":"آب","text":"Type the English meaning"},"expected":["water"],"input":"translation"},
+{"id":"e3","type":"cloze","prompt":{"text":"Complete the sentence"},"tokens":["من","___","می‌خورم"],"blanks":[{"index":1,"expected":["آب"]}],"mode":"tiles","tiles":["آب","نان","شیر"]},
+{"id":"e4","type":"match","prompt":{"text":"Match the pairs"},"pairs":[{"left":"آب","right":"water"},{"left":"نان","right":"bread"}]}]}
+
+Rules: exercise ids unique; "typed" with "input":"script" exercises production (hardest — use sparingly early on); set "vocab_id" whenever the exercise tests a tracked vocab item so the SRS learns from it; distractor options should be plausible (same word class or theme).
+
+Fallback: if this chat cannot render interactive cards (the learner reports seeing no card after you call present_drill), run the same exercises conversationally — ask, wait for the answer, then grade honestly with grade_card and record_attempt via log_practice_session. Never leave a drill half-presented: either the card completes or you run it yourself.`;
+}
+
 function lessonsSection(): string {
   return `# Teaching lessons
 
@@ -126,6 +144,7 @@ function buildTutorSkillBody(p: TutorSkillParams): string {
     roleSection(p.languageName),
     sessionStartSection(),
     reviewsSection(),
+    drillsSection(),
     lessonsSection(),
     authoringSection(),
     contentRulesSection(p.languageCode),

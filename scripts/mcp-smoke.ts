@@ -419,9 +419,8 @@ async function main() {
       instructionsText.includes("no curriculum yet"),
       `get_tutor_instructions missing "no curriculum yet": ${instructionsText.slice(0, 200)}`,
     );
-    // TODO(Task 9): enable once get_tutor_instructions documents present_drill
-    // assert(instructionsText.includes("present_drill"), "tutor instructions missing drill guidance");
-    console.log("get_tutor_instructions OK (raw text unescaped, import_content_package, ZWNJ, no curriculum yet all present)");
+    assert(instructionsText.includes("present_drill"), "tutor instructions missing drill guidance");
+    console.log("get_tutor_instructions OK (raw text unescaped, import_content_package, ZWNJ, no curriculum yet, present_drill all present)");
 
     // --- drill round-trip: present_drill -> record_attempt -> get_drill_results ---
     // Reuses gradedVocabId (a real vocab_id already owned by the smoke user, surfaced by

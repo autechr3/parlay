@@ -253,3 +253,17 @@ describe("tutor-skill siteUrl interpolation", () => {
     expect(occurrences).toBeGreaterThanOrEqual(2); // connection line + fallback import link
   });
 });
+
+describe("tutor-skill interactive drills", () => {
+  it("teaches interactive drills with a schema example and a text fallback", () => {
+    const skill = buildTutorSkill({
+      languageCode: "fa", languageName: "Persian",
+      siteUrl: "https://example.test", flavor: "gpt-instructions",
+    });
+    expect(skill).toContain("present_drill");
+    expect(skill).toContain("get_drill_results");
+    expect(skill).toContain('"type":"choice"');
+    expect(skill).toContain("conversationally");   // fallback guidance
+    expect(skill).toContain("record_attempt");
+  });
+});
