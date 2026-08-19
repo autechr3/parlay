@@ -3,12 +3,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getLanguage } from "@/lib/languages";
 import { importContentPackage, deriveVocabScript, type ContentPackage } from "@/lib/content-package";
 import { buildTutorSkill, buildFirstCurriculumGuidance } from "@/lib/tutor-skill";
-import { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
+import { pickWeakSkills, rankErrors, curriculumConflictMessage, DIRECTIONS, drillGrade, drillDirection } from "./helpers";
+import type { GradeDirection } from "./helpers";
+import type { Drill } from "../exercises/schema";
 
 // Re-exported so any caller that only needs the data layer's surface can import
 // from a single module; tests import the pure functions directly from ./helpers
 // (this file starts with "server-only" and can't be loaded from vitest).
 export { pickWeakSkills, rankErrors, curriculumConflictMessage } from "./helpers";
+export type { GradeDirection } from "./helpers";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -16,9 +19,6 @@ type Admin = ReturnType<typeof createAdminClient>;
 // through getTutorInstructions's params because every other MCP data-layer function takes
 // only (userId, ...domain args), and this one follows that same call shape from route.ts.
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-const DIRECTIONS = ["fa_to_en", "en_to_fa", "stem", "audio"] as const;
-export type GradeDirection = (typeof DIRECTIONS)[number];
 
 export type StudyState = {
   streak: number;
@@ -407,4 +407,144 @@ export async function getTutorInstructions(userId: string, language: string): Pr
     flavor: "gpt-instructions",
   });
   return skill + "\n" + buildFirstCurriculumGuidance(row.name as string);
+}
+
+export type RecordAttemptInput = {
+  drill_id: string;
+  exercise_id: string;
+  correct: boolean;
+  answer_given?: string;
+  ms_taken?: number;
+};
+
+export type DrillResults = {
+  drill_id: string;
+  title: string | null;
+  total: number;
+  answered: number;
+  correct: number;
+  attempts: { exercise_id: string; correct: boolean; answer_given: string | null; ms_taken: number | null }[];
+};
+
+export async function createDrill(
+  userId: string,
+  drill: Drill,
+): Promise<{ drillId: string; exerciseCount: number }> {
+  const admin = createAdminClient();
+
+  const { data: lang } = await admin
+    .from("languages").select("code").eq("code", drill.language).maybeSingle();
+  if (!lang) throw new Error(`unsupported language "${drill.language}"`);
+
+  // Tenant check: every referenced vocab item must live in one of the caller's
+  // curriculums (the admin client bypasses RLS, so this is mandatory).
+  const vocabIds = [...new Set(drill.exercises.flatMap((e) => (e.vocab_id ? [e.vocab_id] : [])))];
+  let curriculumId: string | null = null;
+  if (vocabIds.length > 0) {
+    const owned = await ownedCurriculumIds(admin, userId);
+    const { data: items, error } = await admin
+      .from("vocab_items").select("id, curriculum_id")
+      .in("id", vocabIds).in("curriculum_id", owned.length ? owned : ["00000000-0000-0000-0000-000000000000"]);
+    if (error) throw new Error(error.message);
+    if ((items ?? []).length !== vocabIds.length) {
+      throw new Error("one or more vocab_id values were not found in your curriculums");
+    }
+    curriculumId = items![0].curriculum_id;
+  }
+
+  const { data, error } = await admin
+    .from("drills")
+    .insert({
+      user_id: userId,
+      curriculum_id: curriculumId,
+      language_code: drill.language,
+      title: drill.title ?? null,
+      payload: drill,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { drillId: data.id, exerciseCount: drill.exercises.length };
+}
+
+export async function recordAttempt(
+  userId: string,
+  input: RecordAttemptInput,
+): Promise<{ recorded: true; srs_applied: boolean }> {
+  const admin = createAdminClient();
+
+  const { data: row, error: dErr } = await admin
+    .from("drills").select("id, payload")
+    .eq("id", input.drill_id).eq("user_id", userId).maybeSingle();
+  if (dErr) throw new Error(dErr.message);
+  if (!row) throw new Error("drill not found");
+
+  const drill = row.payload as Drill;
+  const ex = drill.exercises.find((e) => e.id === input.exercise_id);
+  if (!ex) throw new Error(`exercise "${input.exercise_id}" not in drill`);
+
+  const { error: aErr } = await admin.from("drill_attempts").insert({
+    drill_id: input.drill_id,
+    user_id: userId,
+    exercise_id: input.exercise_id,
+    correct: input.correct,
+    answer_given: input.answer_given ?? null,
+    ms_taken: input.ms_taken ?? null,
+  });
+  if (aErr) throw new Error(aErr.message);
+
+  let srsApplied = false;
+  const srsEnabled = ex.srs ?? drill.srs_default;
+  if (srsEnabled && ex.vocab_id) {
+    const { error: gErr } = await admin.rpc("grade_card_for", {
+      p_user: userId,
+      p_vocab_id: ex.vocab_id,
+      p_grade: drillGrade(input.correct),
+      p_direction: drillDirection(ex),
+      p_ms_taken: input.ms_taken ?? null,
+    });
+    // A grading failure (e.g. vocab deleted mid-drill) must not lose the attempt.
+    srsApplied = !gErr;
+  }
+  return { recorded: true, srs_applied: srsApplied };
+}
+
+type DrillAttemptRow = {
+  exercise_id: string;
+  correct: boolean;
+  answer_given: string | null;
+  ms_taken: number | null;
+  attempted_at: string;
+};
+
+export async function getDrillResults(userId: string, drillId: string): Promise<DrillResults> {
+  const admin = createAdminClient();
+  const { data: row, error: dErr } = await admin
+    .from("drills").select("id, title, payload")
+    .eq("id", drillId).eq("user_id", userId).maybeSingle();
+  if (dErr) throw new Error(dErr.message);
+  if (!row) throw new Error("drill not found");
+
+  const { data: attempts, error: aErr } = await admin
+    .from("drill_attempts")
+    .select("exercise_id, correct, answer_given, ms_taken, attempted_at")
+    .eq("drill_id", drillId).eq("user_id", userId)
+    .order("attempted_at", { ascending: true });
+  if (aErr) throw new Error(aErr.message);
+
+  // Latest attempt per exercise wins (drill can be replayed).
+  const latest = new Map<string, DrillAttemptRow>();
+  for (const a of attempts ?? []) latest.set(a.exercise_id, a);
+  const list = [...latest.values()].map((a) => ({
+    exercise_id: a.exercise_id, correct: a.correct,
+    answer_given: a.answer_given, ms_taken: a.ms_taken,
+  }));
+  return {
+    drill_id: row.id,
+    title: row.title,
+    total: (row.payload as Drill).exercises.length,
+    answered: list.length,
+    correct: list.filter((a) => a.correct).length,
+    attempts: list,
+  };
 }

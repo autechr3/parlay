@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickWeakSkills, rankErrors, curriculumConflictMessage } from "../src/lib/mcp/helpers";
+import { pickWeakSkills, rankErrors, curriculumConflictMessage, drillGrade, drillDirection } from "../src/lib/mcp/helpers";
 
 describe("pickWeakSkills", () => {
   it("keeps only the LATEST rating per skill, filters > 3", () => {
@@ -44,5 +44,20 @@ describe("curriculumConflictMessage", () => {
     const msg = curriculumConflictMessage(["Persian Basics"], "Spanish 101");
     expect(msg).toContain("You already have a curriculum ('Persian Basics')");
     expect(msg).toContain("set curriculum.name to exactly 'Persian Basics'");
+  });
+});
+
+describe("drill grading helpers", () => {
+  it("maps correctness to SM-2 grades 4/1", () => {
+    expect(drillGrade(true)).toBe(4);
+    expect(drillGrade(false)).toBe(1);
+  });
+  it("derives direction: producing script = en_to_fa, everything else fa_to_en", () => {
+    const typedScript = { id: "t", type: "typed", prompt: {}, expected: ["آب"], input: "script" } as const;
+    const typedTranslation = { ...typedScript, input: "translation" } as const;
+    const choice = { id: "c", type: "choice", prompt: {}, options: [{ id: "a", text: "x" }, { id: "b", text: "y" }], correct_id: "a" } as const;
+    expect(drillDirection(typedScript as never)).toBe("en_to_fa");
+    expect(drillDirection(typedTranslation as never)).toBe("fa_to_en");
+    expect(drillDirection(choice as never)).toBe("fa_to_en");
   });
 });

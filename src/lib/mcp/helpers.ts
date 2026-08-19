@@ -3,6 +3,14 @@
 // "server-only" chain). The DB-touching functions live in ./data.ts, which
 // re-exports these for callers that only need the data layer's surface.
 
+import type { Exercise } from "../exercises/schema";
+
+// Lives here (not data.ts) because helpers.ts must stay importable from
+// vitest, and drillDirection below needs the GradeDirection type; data.ts
+// re-exports both so its public surface is unchanged for existing importers.
+export const DIRECTIONS = ["fa_to_en", "en_to_fa", "stem", "audio"] as const;
+export type GradeDirection = (typeof DIRECTIONS)[number];
+
 export function pickWeakSkills(
   ratings: { skill: string; rating: number; rated_at: string }[],
 ): { skill: string; rating: number }[] {
@@ -40,4 +48,12 @@ export function curriculumConflictMessage(ownedNames: string[], packageName: str
   const existingName = ownedNames[0];
   return `You already have a curriculum ('${existingName}'). Multi-curriculum support isn't ready yet — ` +
     `to add content to your existing curriculum, set curriculum.name to exactly '${existingName}' in the package.`;
+}
+
+export function drillGrade(correct: boolean): number {
+  return correct ? 4 : 1;
+}
+
+export function drillDirection(ex: Exercise): GradeDirection {
+  return ex.type === "typed" && ex.input === "script" ? "en_to_fa" : "fa_to_en";
 }
