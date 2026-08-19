@@ -50,6 +50,9 @@ const EXPECTED_TOOLS = [
   "get_review_queue",
   "grade_card",
   "get_tutor_instructions",
+  "present_drill",
+  "record_attempt",
+  "get_drill_results",
 ].sort();
 
 function fail(msg: string): never {
@@ -250,14 +253,44 @@ async function main() {
     );
     await rpcNotify(token, "notifications/initialized");
 
-    // --- tools/list: assert exactly the 11 names ---
-    const listResult = (await rpcRequest(token, "tools/list")) as { tools?: { name: string }[] };
-    const names = (listResult?.tools ?? []).map((t) => t.name).sort();
+    // --- tools/list: assert exactly the 15 names ---
+    const listResult = (await rpcRequest(token, "tools/list")) as {
+      tools?: { name: string; _meta?: Record<string, unknown> }[];
+    };
+    const toolsListed = listResult?.tools ?? [];
+    const names = toolsListed.map((t) => t.name).sort();
     assert(
       JSON.stringify(names) === JSON.stringify(EXPECTED_TOOLS),
       `tools/list mismatch:\n  got:      ${JSON.stringify(names)}\n  expected: ${JSON.stringify(EXPECTED_TOOLS)}`,
     );
     console.log(`tools/list OK (${names.length} tools)`);
+
+    // --- MCP Apps assertions: present_drill's _meta wiring + the widget resource ---
+    const presentDrill = toolsListed.find((t) => t.name === "present_drill");
+    assert(presentDrill, "present_drill missing from tools/list");
+    const uiMeta = (presentDrill?._meta ?? {}) as Record<string, unknown>;
+    assert(
+      (uiMeta.ui as { resourceUri?: string } | undefined)?.resourceUri === "ui://parlay/drill.html",
+      "present_drill _meta.ui.resourceUri wrong",
+    );
+    assert(uiMeta["openai/outputTemplate"] === "ui://parlay/drill.html", "openai/outputTemplate alias missing");
+
+    const resList = (await rpcRequest(token, "resources/list", {})) as { resources?: { uri: string }[] };
+    const uris = (resList.resources ?? []).map((r) => r.uri);
+    assert(uris.includes("ui://parlay/drill.html"), `widget resource not listed (got: ${uris.join(", ")})`);
+
+    const resRead = (await rpcRequest(token, "resources/read", { uri: "ui://parlay/drill.html" })) as {
+      contents?: { mimeType?: string; text?: string }[];
+    };
+    const widgetContents = resRead.contents?.[0];
+    assert(widgetContents?.mimeType === "text/html;profile=mcp-app", "widget resource mimeType wrong");
+    assert(
+      typeof widgetContents?.text === "string" && /<!doctype html/i.test(widgetContents.text),
+      "widget resource is not an HTML doc",
+    );
+    assert(widgetContents!.text!.includes("parlay-drill"), "widget HTML missing marker");
+    assert(!widgetContents!.text!.includes("__PARLAY_SITE__"), "SITE placeholder not substituted");
+    console.log("MCP Apps assertions OK (present_drill _meta, widget resource listed + read)");
 
     // --- get_study_state ---
     const state = (await callTool(token, "get_study_state")) as Record<string, unknown>;
@@ -386,7 +419,56 @@ async function main() {
       instructionsText.includes("no curriculum yet"),
       `get_tutor_instructions missing "no curriculum yet": ${instructionsText.slice(0, 200)}`,
     );
+    // TODO(Task 9): enable once get_tutor_instructions documents present_drill
+    // assert(instructionsText.includes("present_drill"), "tutor instructions missing drill guidance");
     console.log("get_tutor_instructions OK (raw text unescaped, import_content_package, ZWNJ, no curriculum yet all present)");
+
+    // --- drill round-trip: present_drill -> record_attempt -> get_drill_results ---
+    // Reuses gradedVocabId (a real vocab_id already owned by the smoke user, surfaced by
+    // get_review_queue above) as the exercise's vocab_id — there's no add_vocab flow in this
+    // script to mint a fresh id from, and reusing gradedVocabId means the existing
+    // preExistingVocabReview/review_log/study_days cleanup below already restores whatever
+    // record_attempt's SRS side-effect touches, with no extra drill-specific vocab cleanup.
+    const drillCallResult = (await rpcRequest(token, "tools/call", {
+      name: "present_drill",
+      arguments: {
+        drill: {
+          language: "fa",
+          title: "smoke drill",
+          exercises: [
+            {
+              id: "s1", type: "choice", prompt: { text: "pick" }, vocab_id: gradedVocabId,
+              options: [{ id: "a", text: "آب", script: true }, { id: "b", text: "نان", script: true }],
+              correct_id: "a",
+            },
+          ],
+        },
+      },
+    })) as { isError?: boolean; content?: unknown; structuredContent?: unknown };
+    assert(!drillCallResult.isError, `present_drill errored: ${JSON.stringify(drillCallResult.content)}`);
+    const sc = drillCallResult.structuredContent as { drill_id: string; drill: { exercises: unknown[] } };
+    assert(typeof sc?.drill_id === "string" && sc.drill_id.length === 36, "present_drill structuredContent.drill_id missing");
+    assert(sc.drill.exercises.length === 1, "structuredContent.drill roundtrip failed");
+
+    const rec = (await callTool(token, "record_attempt", {
+      drill_id: sc.drill_id, exercise_id: "s1", correct: true, answer_given: "a", ms_taken: 1200,
+    })) as { recorded: boolean; srs_applied: boolean };
+    assert(rec.recorded === true, "record_attempt failed");
+    assert(rec.srs_applied === true, "record_attempt did not apply SRS grade");
+
+    const drillResults = (await callTool(token, "get_drill_results", { drill_id: sc.drill_id })) as {
+      total: number; answered: number; correct: number;
+    };
+    assert(
+      drillResults.total === 1 && drillResults.answered === 1 && drillResults.correct === 1,
+      `bad drill results: ${JSON.stringify(drillResults)}`,
+    );
+
+    // cross-check SRS side-effect with the admin client: vocab_reviews row advanced
+    const { data: reviewRow } = await admin.from("vocab_reviews").select("repetitions")
+      .eq("user_id", userId).eq("vocab_id", gradedVocabId).maybeSingle();
+    assert(reviewRow && reviewRow.repetitions >= 1, "grade_card_for side-effect missing");
+    console.log(`drill round-trip OK (drill ${sc.drill_id}, record_attempt + get_drill_results + SRS verified)`);
 
     // Mark that all checks passed; cleanup will be exception-safe
     allChecksPassed = true;
@@ -418,7 +500,7 @@ async function main() {
 
       // Print success line only if all checks passed AND cleanup succeeded
       if (allChecksPassed && !cleanupErr && (process.exitCode === 0 || process.exitCode === undefined)) {
-        console.log("MCP SMOKE OK (12 tools, state/log/queue/grade/tutor-instructions verified, cleaned up)");
+        console.log("MCP SMOKE OK (15 tools, state/log/queue/grade/tutor-instructions/drill round-trip verified, cleaned up)");
       }
     }
   }
@@ -437,6 +519,14 @@ async function cleanup(
   },
 ) {
   const errors: string[] = [];
+
+  // Delete drills created by present_drill (drill_attempts cascade via FK)
+  try {
+    const { error } = await admin.from("drills").delete().eq("user_id", ctx.userId);
+    if (error) errors.push(`delete drills: ${error.message}`);
+  } catch (e) {
+    errors.push(`delete drills exception: ${(e as Error).message}`);
+  }
 
   // Delete practice_sessions
   if (ctx.practiceSessionId) {

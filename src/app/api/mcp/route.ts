@@ -16,7 +16,12 @@ import {
   getReviewQueue,
   gradeCard,
   getTutorInstructions,
+  createDrill,
+  recordAttempt,
+  getDrillResults,
 } from "@/lib/mcp/data";
+import { drillSchema } from "@/lib/exercises/schema";
+import { DRILL_WIDGET_HTML } from "@/widgets/generated/drill-widget-html";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -48,6 +53,25 @@ async function toolResultVerbatim(fn: () => Promise<string>) {
   try {
     const text = await fn();
     return { content: [{ type: "text" as const, text }] };
+  } catch (e) {
+    return {
+      content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
+      isError: true,
+    };
+  }
+}
+
+// For tools whose result must reach an MCP Apps widget as structured data
+// (currently only present_drill): content carries the model-facing text,
+// structuredContent carries the machine payload the widget reads via
+// ontoolresult. Every other tool keeps toolResult's stringify contract —
+// log_practice_session and add_vocab in particular MUST stay stringified.
+async function toolResultStructured(
+  fn: () => Promise<{ text: string; structured: Record<string, unknown> }>,
+) {
+  try {
+    const { text, structured } = await fn();
+    return { content: [{ type: "text" as const, text }], structuredContent: structured };
   } catch (e) {
     return {
       content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }],
@@ -237,6 +261,89 @@ function registerTools(server: McpServer, userId: string) {
       inputSchema: z.object({ language: z.string().min(1).default("fa") }),
     },
     ({ language }) => toolResultVerbatim(() => getTutorInstructions(userId, language)),
+  );
+
+  const DRILL_WIDGET_URI = "ui://parlay/drill.html";
+
+  server.registerTool(
+    "present_drill",
+    {
+      description:
+        "Present an interactive drill (1-10 exercises: choice, typed, cloze, match) to the learner. In hosts that support MCP Apps the drill renders as an interactive card in the chat and attempts are recorded automatically; when it completes, call get_drill_results. If the learner reports no card appeared, run the exercises conversationally and grade with grade_card instead.",
+      inputSchema: z.object({ drill: z.unknown() }),
+      _meta: {
+        ui: { resourceUri: DRILL_WIDGET_URI },
+        "ui/resourceUri": DRILL_WIDGET_URI, // legacy MCP Apps alias
+        "openai/outputTemplate": DRILL_WIDGET_URI, // ChatGPT Apps SDK alias
+      },
+    },
+    ({ drill }) =>
+      toolResultStructured(async () => {
+        let raw: unknown = drill;
+        if (typeof raw === "string") {
+          try {
+            raw = JSON.parse(raw);
+          } catch (e) {
+            throw new Error(`drill is not valid JSON: ${(e as Error).message}`);
+          }
+        }
+        const parsed = drillSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new Error(`invalid drill: ${JSON.stringify(parsed.error.issues)}`);
+        }
+        const { drillId, exerciseCount } = await createDrill(userId, parsed.data);
+        return {
+          text: `Drill ${drillId} presented (${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}). Wait for the learner to finish it in the interactive card, then call get_drill_results. If no card is visible to the learner, run the exercises conversationally instead.`,
+          structured: { drill_id: drillId, drill: parsed.data },
+        };
+      }),
+  );
+
+  server.registerTool(
+    "record_attempt",
+    {
+      description:
+        "Record one answered exercise of a presented drill (normally called by the drill widget itself). Applies an SRS grade automatically when the exercise is linked to a vocab item.",
+      inputSchema: z.object({
+        drill_id: z.string().uuid(),
+        exercise_id: z.string().min(1),
+        correct: z.boolean(),
+        answer_given: z.string().optional(),
+        ms_taken: z.number().int().positive().optional(),
+      }),
+    },
+    (input) => toolResult(() => recordAttempt(userId, input)),
+  );
+
+  server.registerTool(
+    "get_drill_results",
+    {
+      description:
+        "Fetch the recorded results of a presented drill (per-exercise correctness, timing, totals) to review performance and adapt the session.",
+      inputSchema: z.object({ drill_id: z.string().uuid() }),
+    },
+    ({ drill_id }) => toolResult(() => getDrillResults(userId, drill_id)),
+  );
+
+  server.registerResource(
+    "parlay-drill-widget",
+    DRILL_WIDGET_URI,
+    {
+      description: "Parlay interactive drill player",
+      mimeType: "text/html;profile=mcp-app",
+    },
+    async () => ({
+      contents: [
+        {
+          uri: DRILL_WIDGET_URI,
+          mimeType: "text/html;profile=mcp-app",
+          // SITE substitution keeps the widget URL-free at build time; the CSP
+          // declaration lets the iframe load the Estedad font from our origin.
+          text: DRILL_WIDGET_HTML.replaceAll("__PARLAY_SITE__", SITE),
+          _meta: { ui: { csp: { resourceDomains: [SITE] } } },
+        },
+      ],
+    }),
   );
 }
 
