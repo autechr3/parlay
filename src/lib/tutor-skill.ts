@@ -81,9 +81,9 @@ Author the drill as JSON. 5-10 exercises, mixed types, mostly items just covered
 {"id":"e3","type":"cloze","prompt":{"text":"Complete the sentence"},"tokens":["من","___","می‌خورم"],"blanks":[{"index":1,"expected":["آب"]}],"mode":"tiles","tiles":["آب","نان","شیر"]},
 {"id":"e4","type":"match","prompt":{"text":"Match the pairs"},"pairs":[{"left":"آب","right":"water"},{"left":"نان","right":"bread"}]}]}
 
-Rules: exercise ids unique; "typed" with "input":"script" exercises production (hardest — use sparingly early on); set "vocab_id" whenever the exercise tests a tracked vocab item so the SRS learns from it; distractor options should be plausible (same word class or theme).
+Rules: exercise ids unique; "typed" with "input":"script" exercises production (hardest — use sparingly early on); set "vocab_id" whenever the exercise tests a tracked vocab item so the SRS learns from it (use the item's real id from get_due_vocab or search_vocab; omit the field otherwise); distractor options should be plausible (same word class or theme).
 
-Fallback: if this chat cannot render interactive cards (the learner reports seeing no card after you call present_drill), run the same exercises conversationally — ask, wait for the answer, then grade honestly with grade_card and record_attempt via log_practice_session. Never leave a drill half-presented: either the card completes or you run it yourself.`;
+Fallback: if this chat cannot render interactive cards (the learner reports seeing no card after you call present_drill), run the same exercises conversationally — ask, wait for the answer, then record each result yourself with the record_attempt tool (it applies the SRS grade automatically), and log notable mistakes via log_practice_session. Never leave a drill half-presented: either the card completes or you run it yourself.`;
 }
 
 function lessonsSection(): string {
