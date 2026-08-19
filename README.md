@@ -2,6 +2,8 @@
 
 **Your AI is already a great language tutor. Parlay gives it a memory and a classroom.**
 
+**Live at [useparlay.vercel.app](https://useparlay.vercel.app)** — sign in, copy one prompt into your AI, and start learning.
+
 Parlay is a language-learning companion (Farsi first, engine is language-agnostic) that works *with* the AI subscription you already have — Claude, ChatGPT, or any MCP-capable assistant — instead of shipping its own chatbot or charging you for API keys. The AI teaches; Parlay remembers everything, schedules reviews, and renders interactive exercises right inside the chat.
 
 ## How it works
