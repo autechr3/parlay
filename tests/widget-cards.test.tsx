@@ -37,6 +37,11 @@ describe("TypedCard", () => {
     const { getByLabelText } = wrap(<TypedCard exercise={ex} languageCode="fa" onAnswer={vi.fn()} />);
     expect(getByLabelText("backspace")).toBeTruthy();
   });
+  it("prevents focus steal when a script key is pressed", () => {
+    const { getByLabelText } = wrap(<TypedCard exercise={ex} languageCode="fa" onAnswer={vi.fn()} />);
+    const key = getByLabelText("backspace");
+    expect(fireEvent.mouseDown(key)).toBe(false);
+  });
 });
 
 describe("MatchCard", () => {

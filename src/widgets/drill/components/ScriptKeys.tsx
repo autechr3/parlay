@@ -29,18 +29,18 @@ export function ScriptKeys({ onKey, onBackspace, rtl = true }: {
       {KEYBOARD_LAYOUT.map((row, ri) => (
         <View key={ri} style={{ display: "flex", gap: space(1) }}>
           {row.map((ch) => (
-            <Pressable key={ch} onPress={() => onKey(ch)} style={keyStyle}>
+            <Pressable key={ch} onPress={() => onKey(ch)} style={keyStyle} preventFocusSteal>
               <Text style={{ fontFamily: font.script, fontSize: "1.1em", color: theme.text }}>{ch}</Text>
             </Pressable>
           ))}
         </View>
       ))}
       <View style={{ display: "flex", gap: space(1) }}>
-        <Pressable onPress={() => onKey(ZWNJ)} style={keyStyle}>
+        <Pressable onPress={() => onKey(ZWNJ)} style={keyStyle} preventFocusSteal>
           <Text style={{ fontFamily: font.script, fontSize: "0.9em", color: theme.text }}>نیم‌فاصله</Text>
         </Pressable>
-        <Pressable ariaLabel="space" onPress={() => onKey(" ")} style={{ ...keyStyle, width: 160 }} />
-        <Pressable ariaLabel="backspace" onPress={onBackspace} style={keyStyle}>
+        <Pressable ariaLabel="space" onPress={() => onKey(" ")} style={{ ...keyStyle, width: 160 }} preventFocusSteal />
+        <Pressable ariaLabel="backspace" onPress={onBackspace} style={keyStyle} preventFocusSteal>
           <Text style={{ color: theme.text }}>⌫</Text>
         </Pressable>
       </View>

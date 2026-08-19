@@ -33,6 +33,16 @@ describe("drillSchema", () => {
   it("rejects duplicate exercise ids", () => {
     expect(drillSchema.safeParse({ language: "fa", exercises: [choice, { ...choice }] }).success).toBe(false);
   });
+  it("rejects a tiles-mode cloze whose tile pool has no match for a blank", () => {
+    const missing = {
+      id: "c1", type: "cloze", prompt: { text: "fill" },
+      tokens: ["من", "___", "می‌خورم"],
+      blanks: [{ index: 1, expected: ["آب"] }], mode: "tiles", tiles: ["نان", "شیر"],
+    };
+    expect(drillSchema.safeParse({ language: "fa", exercises: [missing] }).success).toBe(false);
+    const present = { ...missing, tiles: ["آب", "نان"] };
+    expect(drillSchema.safeParse({ language: "fa", exercises: [present] }).success).toBe(true);
+  });
   it("accepts all four types together", () => {
     const d = drillSchema.parse({
       language: "fa",

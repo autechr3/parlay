@@ -12,8 +12,8 @@ export function Text({ style, children, lang, dir }: BaseProps & { lang?: string
   return <span lang={lang} dir={dir} style={style}>{children}</span>;
 }
 
-export function Pressable({ style, children, onPress, disabled, ariaLabel }: BaseProps & {
-  onPress: () => void; disabled?: boolean; ariaLabel?: string;
+export function Pressable({ style, children, onPress, disabled, ariaLabel, preventFocusSteal }: BaseProps & {
+  onPress: () => void; disabled?: boolean; ariaLabel?: string; preventFocusSteal?: boolean;
 }) {
   return (
     <button
@@ -21,6 +21,7 @@ export function Pressable({ style, children, onPress, disabled, ariaLabel }: Bas
       aria-label={ariaLabel}
       disabled={disabled}
       onClick={onPress}
+      onMouseDown={preventFocusSteal ? (e) => e.preventDefault() : undefined}
       style={{ cursor: disabled ? "default" : "pointer", border: "none", background: "none", padding: 0, font: "inherit", ...style }}
     >
       {children}

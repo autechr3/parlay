@@ -38,6 +38,7 @@ function Root() {
       <View style={{ background: theme.bg, color: theme.text, minHeight: 120, padding: 12, fontFamily: "'Figtree', 'Segoe UI', system-ui, sans-serif" }}>
         {state.payload ? (
           <DrillPlayer
+            key={state.payload.drill_id}
             drill={state.payload.drill}
             languageCode={state.payload.drill.language}
             theme={theme}

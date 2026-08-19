@@ -81,6 +81,13 @@ export const drillSchema = z.object({
           ctx.addIssue({ code: "custom", path: ["exercises", i, "blanks"], message: `blank index ${b.index} out of range` });
         }
       }
+      if (ex.mode === "tiles" && ex.tiles && ex.tiles.length > 0) {
+        for (const b of ex.blanks) {
+          if (!b.expected.some((exp) => ex.tiles!.includes(exp))) {
+            ctx.addIssue({ code: "custom", path: ["exercises", i, "tiles"], message: `blank ${b.index} has no matching tile` });
+          }
+        }
+      }
     }
   });
 });

@@ -309,7 +309,7 @@ function registerTools(server: McpServer, userId: string) {
         exercise_id: z.string().min(1),
         correct: z.boolean(),
         answer_given: z.string().optional(),
-        ms_taken: z.number().int().positive().optional(),
+        ms_taken: z.number().int().nonnegative().optional(),
       }),
     },
     (input) => toolResult(() => recordAttempt(userId, input)),
