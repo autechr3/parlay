@@ -59,6 +59,9 @@ const EXPECTED_TOOLS = [
   "get_review_queue",
   "grade_card",
   "get_tutor_instructions",
+  "present_drill",
+  "record_attempt",
+  "get_drill_results",
 ].sort();
 
 function fail(msg: string): never {
